@@ -1,0 +1,45 @@
+name: R5 Fast Deployment Sanity
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    name: Entrypoints + scientific smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Verify R5 upload landed correctly
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f app.py
+          test -f streamlit_app.py
+          test -f research_selftest.py
+          test -f requirements.txt
+          grep -q "2026-08-29-r5-fresh-entrypoint" app.py
+          grep -q "2026-08-29-r5-fresh-entrypoint" streamlit_app.py
+          cmp -s app.py streamlit_app.py
+          echo "R5 root files PASS"
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile both Streamlit entrypoints
+        run: python -m py_compile app.py streamlit_app.py research_selftest.py
+      - name: Run scientific smoke audit
+        run: python research_selftest.py

@@ -1,1 +1,303 @@
-# supercompatibility-lab
+# Supercompatibility Lab
+
+A responsive **Streamlit research platform for martensitic compatibility, cofactor conditions, transformation twins, uncertainty, temperature dependence and inverse lattice design**.
+
+The built-in reference transformation is **B2 austenite → B19′ martensite**. The software keeps several theoretical questions separate instead of collapsing them into one vague “compatibility score”:
+
+1. **Single-variant austenite/martensite compatibility** — stretch condition \(\lambda_2=1\) and CMC degeneracy.
+2. **Classical cofactor supercompatibility** — full CC1–CC3 evaluation after classifying non-trivial systems as Type-I, Type-II or Compound domains.
+3. **Metric/correspondence intercompatibility** — CMC habit planes, SMC shear and the shear/shear mismatch \(\varepsilon\).
+4. **Transformation-twin structure** — symmetry reduction, double cosets and full two-fold-generated twin exploration for the built-in transformation.
+5. **Research extensions** — temperature sweeps, XRD uncertainty propagation, literature benchmarks, microstructure metadata, elastocaloric/fatigue metrics, inverse design, user-trained composition→lattice ML, multi-step transformation chains and guarded frontier diagnostics.
+
+The project is designed so that **physics calculations live in `src/` and the Streamlit UI only orchestrates them**. Numerical claims are backed by automated tests and explicit tolerances.
+
+---
+
+## Why this is more than a calculator
+
+The app is structured as a reproducible research workflow:
+
+```text
+measured lattice parameters
+        ↓
+metrics + correspondence
+        ↓
+┌─────────────────────┬────────────────────────┐
+│ metric route        │ classical stretch route│
+│ CMC → habit plane   │ U → λ1, λ2, λ3         │
+│ SMC → A/M shear     │ CC1, CC2, CC3          │
+└─────────────────────┴────────────────────────┘
+        ↓                       ↓
+full symmetry/twin exploration + cross-checking
+        ↓
+explicit residuals / uncertainty / T-dependence
+        ↓
+inverse lattice design and data-driven screening
+```
+
+The program **does not** assign an arbitrary “95% compatible” score. It reports physical residuals and inequality margins with units/definitions.
+
+---
+
+## UX design
+
+The Streamlit interface has two layers:
+
+- **Guided overview** — default learning/screening path that answers four questions in plain language before exposing residuals: single-variant A/M fit, CMC habit-plane fit, cofactor domain fit, and metric shear/shear fit.
+- **Research workspaces** — full matrices, twin/domain tables, temperature/uncertainty, reconstruction, inverse design, ML and theorem-level cross-checks.
+
+The B2/B19′ lattice input form is hidden automatically in the parent-reconstruction workspace because it is irrelevant there. Physical input labels use full phase/parameter names and display units; dimensionless graph or ratio controls are explicitly identified. Reconstruction also asks for the orientation-matrix direction convention instead of silently assuming that all EBSD exports use the same convention.
+
+## Main workspaces
+
+### 1. Compatibility dashboard
+
+A compact view of:
+
+- \(\lambda_1,\lambda_2,\lambda_3\)
+- \(|\lambda_2-1|\)
+- CMC degeneracy distance
+- best normalized CC2 residual
+- CC3 margin
+- metric shear/shear mismatch \(\varepsilon\), when an exact CMC habit plane exists
+- explicit warning when the classical cofactor test and the metric shear/shear construction do not give the same certification
+- interactive 3D CMC zero surface
+
+### 2. PTMC / cofactor cross-check
+
+Implements the full nonlinear conditions
+
+\[
+\mathrm{CC1}:\;\lambda_2=1
+\]
+
+\[
+\mathrm{CC2}:\;a\cdot U\,\operatorname{cof}(U^2-I)n=0
+\]
+
+\[
+\mathrm{CC3}:\;\operatorname{tr}(U^2)-\det(U^2)-\frac{|a|^2|n|^2}{4}-2\ge0.
+\]
+
+Non-trivial cubic two-fold generators are grouped by the symmetry-related stretch they produce. Singleton generators are evaluated as Type-I/Type-II domains; paired perpendicular generators are evaluated with the dedicated Compound-domain rank-one solutions. The exact CC2 value, a normalized CC2 residual, applicable simplified Type-I/II checks, and the CC3 margin are shown.
+
+### 3. Complete twin explorer
+
+For the built-in B2→B19′ correspondence:
+
+- full cubic parent point group: **48 operations**
+- correspondence intersection subgroup: **4 operations**
+- double-coset partition: **7 classes**
+- symmetry-equivalent two-fold generators are retained and labeled
+- Type-I and Type-II transformation-twin elements are calculated from correspondence, metrics and parent symmetry
+- compound twins are detected when the Type-I and Type-II descriptions coincide for the same intercorrespondence class
+- when CMC gives habit planes, every candidate is ranked by the metric shear/shear mismatch \(\varepsilon\)
+
+### 4. Temperature & uncertainty
+
+**Temperature sweep** accepts measured/fitted lattice parameters as a function of temperature and recomputes CMC/cofactor residuals row by row.
+
+**Uncertainty propagation** performs Monte Carlo propagation of user-supplied 1σ lattice-parameter uncertainties. Reported fractions mean **fraction of samples inside explicitly chosen tolerances**. They are not presented as the probability of satisfying an exact equality.
+
+### 5. Literature, microstructure & functional performance
+
+A curated database separates:
+
+- experimental benchmarks
+- mechanism studies
+- theory
+- data-driven design methods
+- device demonstrations
+
+Microstructure inputs—grain size, distribution, precipitates, retained martensite, dislocation density and processing—are stored alongside the exact geometry calculations. The app intentionally **does not fabricate a universal fatigue-life equation** from these descriptors.
+
+Optional functional measurements include transformation temperatures, thermal/stress hysteresis, \(\Delta T_{ad}\), COP, recoverable strain and cycle count.
+
+### 6. Inverse lattice design
+
+Differential-evolution and Latin-hypercube/Pareto search operate directly in normalized lattice space \((a,b,c,\beta)\). The objective is composed of explicit residuals:
+
+- \(|\lambda_2-1|\)
+- normalized CC2 residual
+- CC3 violation only
+- CMC degeneracy distance
+- optional proximity penalty to the starting alloy
+
+The objective weights are visible and user-controlled.
+
+### 7. Composition → lattice ML
+
+No universal pretrained model is shipped. Instead:
+
+1. upload a real composition/processing dataset;
+2. select numerical descriptors;
+3. cross-validate linear regression, random forest or extra-trees regression;
+4. inspect MAE/RMSE/\(R^2\) for every lattice target;
+5. predict candidate lattice parameters;
+6. pass the predicted lattices through the exact compatibility engine.
+
+This prevents a low predicted compatibility residual from being treated as meaningful when the lattice model itself is poorly validated.
+
+### 8. Multi-step transformations
+
+A generic metric/stretch engine accepts phase chains such as B2→R→B19′. Each stage has its own general triclinic unit cell and 3×3 correspondence matrix. The generic engine reports stagewise stretch eigenvalues and CMC distance.
+
+Full built-in twin classification is **not silently generalized** to arbitrary phase pairs; that requires a phase-specific symmetry/correspondence module.
+
+### 9. Parent ↔ daughter orientation reconstruction
+
+A grain-level reconstruction workbench accepts daughter orientations plus measured grain adjacency and provides five independently testable reconstruction routes:
+
+- neighbor voting;
+- grain graph + Markov clustering;
+- candidate-level variant graph probability propagation;
+- nucleation + growth;
+- operator / groupoid consistency.
+
+A bounded OR-refinement routine can reduce neighbor inconsistency near a supplied physical OR. Built-in KS, NW, Bain, Pitsch and Burgers OR families provide symmetry-generated variants and forward parent→daughter prediction. A synthetic dataset with known parent labels is included for method validation. Approximate centroid k-NN adjacency is available only as a visibly labelled fallback when true segmented-grain adjacency is unavailable.
+
+### 10. Independent compatibility methods
+
+The app now cross-checks the main compatibility engine against additional exact or theorem-based diagnostics:
+
+- generic Hadamard rank-one jump condition;
+- single-variant Ball–James middle-stretch condition;
+- pairwise martensite-variant rank-one spectral criterion;
+- direct all-volume-fraction laminate singular-value scan;
+- cubic→orthorhombic triplet-condition residuals with an explicit applicability guard.
+
+These methods answer different questions and are never collapsed into a fabricated universal percentage score.
+
+### 11. Research frontier & methods
+
+The app reports stretch-variant and commutator diagnostics and includes a guarded implementation of current extreme-compatibility reference tensors. Those tensors are applied only when the transformation belongs to their stated crystallographic applicability class. For the built-in B2→B19′ correspondence, the monoclinic unique axis maps to a cubic `<110>` direction, so cubic→monoclinic-II extreme targets are **not** used as a pass/fail criterion.
+
+---
+
+## Friendly physical input
+
+The primary UI requests real unit-cell quantities with full names and units:
+
+| Input | Unit | Meaning |
+|---|---:|---|
+| B2 austenite lattice parameter — `a_B2` | Å | cubic parent cell edge |
+| B19′ martensite lattice parameter — `a_B19′` | Å | martensite a-axis |
+| B19′ martensite lattice parameter — `b_B19′` | Å | martensite b-axis |
+| B19′ martensite lattice parameter — `c_B19′` | Å | martensite c-axis |
+| B19′ monoclinic angle — `β` | ° | angle between martensite a- and c-axes |
+
+Normalized \(a,b,c\) ratios are calculated internally and shown as outputs, not ambiguous input symbols.
+
+---
+
+## Reproducibility and validation
+
+The current test suite checks:
+
+- published B2/B19′ normalized lattice ratios;
+- CMC matrices and degeneracy;
+- first-order habit-plane solutions;
+- SMC shear vectors;
+- transformation-twin shear amplitudes;
+- metric shear/shear \(\varepsilon\) and angles;
+- construction of \(U\) and \(\lambda_2\);
+- classical Type-I/Type-II/Compound cofactor conditions;
+- the deliberate cross-framework discrepancy in a C1 teaching benchmark;
+- cubic symmetry-group size, correspondence subgroup and double-coset partition;
+- temperature evaluation;
+- zero-uncertainty Monte Carlo behavior;
+- generic multi-step stretch equivalence;
+- frontier applicability guard;
+- user-trained ML and physics screening;
+- integrity of the curated literature database;
+- ideal KS/NW/Bain/Pitsch/Burgers variant counts;
+- five-method synthetic parent-reconstruction accuracy and OR refinement;
+- Hadamard rank-one diagnostics and pairwise stretch-variant compatibility;
+- direct all-volume-fraction cofactor verification;
+- exact constructed triplet-condition benchmarks.
+
+Run:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+GitHub Actions runs the same checks on pushes and pull requests.
+
+See:
+
+- [`docs/METHODS.md`](docs/METHODS.md) — equations, conventions and algorithmic details
+- [`docs/VALIDATION.md`](docs/VALIDATION.md) — benchmark philosophy and expected numerical checkpoints
+- [`docs/REFERENCES.md`](docs/REFERENCES.md) — primary literature and what each source supports
+- [`docs/PAPER_WORKFLOW.md`](docs/PAPER_WORKFLOW.md) — a defensible workflow for a research study
+- [`docs/DATA_SCHEMA.md`](docs/DATA_SCHEMA.md) — CSV schemas and units
+- [`docs/RECONSTRUCTION.md`](docs/RECONSTRUCTION.md) — orientation conventions, OR families and parent-reconstruction algorithms
+
+---
+
+## Install and run
+
+Recommended: Python 3.12.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Streamlit Community Cloud
+
+1. Upload this repository to GitHub.
+2. Create a Streamlit Community Cloud app from the repository.
+3. Set the entry point to `app.py`.
+4. Deploy. No secrets are required.
+
+---
+
+## Repository structure
+
+```text
+supercompatibility-lab/
+├── app.py
+├── src/
+│   ├── core.py              # metric correspondence, CMC, SMC, metric twins
+│   ├── ptmc.py              # stretch tensor and CC1–CC3
+│   ├── symmetry.py          # point groups, double cosets, full twin explorer
+│   ├── distances.py         # compatibility residual dashboard
+│   ├── temperature.py       # temperature-series evaluation
+│   ├── uncertainty.py       # Monte Carlo error propagation
+│   ├── literature.py        # curated literature loader
+│   ├── microstructure.py    # evidence-linked context, no fake fatigue model
+│   ├── performance.py       # optional measured functional metrics
+│   ├── design.py            # inverse and Pareto lattice design
+│   ├── ml.py                # user-trained composition→lattice ML
+│   ├── multistep.py         # general stage-wise metric/stretch engine
+│   ├── frontier.py          # guarded extreme-compatibility diagnostics
+│   ├── reconstruction.py    # parent/daughter ORs and five reconstruction methods
+│   ├── compatibility_methods.py # independent rank-one, all-f and triplet checks
+│   ├── presets.py
+│   └── visualization.py
+├── data/
+├── docs/
+├── scripts/
+├── tests/
+├── .github/workflows/tests.yml
+├── requirements.txt
+└── requirements-dev.txt
+```
+
+---
+
+## Scientific scope and non-claims
+
+This software is intended for **research screening, reproducible analysis and hypothesis generation**. It does not claim that crystallographic supercompatibility alone determines fatigue life, hysteresis, elastocaloric performance or synthesizability. Those outcomes also depend on microstructure, defects, processing, kinetics, loading and other material-specific factors.
+
+Likewise, equality conditions such as \(\lambda_2=1\), CC2=0 and \(\varepsilon=0\) are exact mathematical statements. Experimental and floating-point calculations require tolerances; the software exposes those tolerances rather than hiding them.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

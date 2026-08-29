@@ -1,0 +1,85 @@
+name: R6 Scientific + Streamlit CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r6-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Verify fresh R6 entrypoint exists
+        run: |
+          test -f supercompatibility_r6.py
+          test -f app.py
+          test -f streamlit_app.py
+          grep -q "2026-08-29-r6-fresh-repo" supercompatibility_r6.py
+          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_r6.py"
+
+      - name: Compile
+        run: python -m compileall -q supercompatibility_r6.py app.py streamlit_app.py src scripts tests
+
+      - name: Scientific self-test
+        run: python research_selftest.py
+
+      - name: Full automated tests
+        run: python -m pytest -q
+
+      - name: Release verification
+        run: python scripts/verify_release.py
+
+      - name: Start Streamlit R6 and check health
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m streamlit run supercompatibility_r6.py \
+            --server.headless true \
+            --server.address 127.0.0.1 \
+            --server.port 8501 \
+            > streamlit-r6.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for i in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health | grep -qi ok; then
+              echo "R6 Streamlit health PASS"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "R6 Streamlit failed to start"
+          cat streamlit-r6.log
+          exit 1
+
+      - name: Upload Streamlit log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-r6-log
+          path: streamlit-r6.log
+          if-no-files-found: ignore

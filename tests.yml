@@ -1,0 +1,24 @@
+name: R6 Fast Sanity
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Confirm correct entrypoint, not legacy app
+        run: |
+          grep -q "2026-08-29-r6-fresh-repo" supercompatibility_r6.py
+          ! sed -n '1,20p' supercompatibility_r6.py | grep -q "from src.core import"
+          echo "R6 entrypoint identity PASS"
+      - name: Compile entrypoints
+        run: python -m py_compile supercompatibility_r6.py app.py streamlit_app.py

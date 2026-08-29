@@ -1,0 +1,86 @@
+name: Supercompatibility Lab CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supercompatibility-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Scientific tests + deployment checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Repository deployment preflight
+        run: python scripts/deployment_preflight.py
+
+      - name: Verify standalone Streamlit bundle equals research source
+        run: python scripts/verify_embedded_app.py
+
+      - name: Compile all Python files
+        run: python -m py_compile app.py src/*.py scripts/*.py
+
+      - name: Reproduce numerical release benchmarks
+        run: python scripts/verify_release.py
+
+      - name: Run complete automated test suite
+        run: pytest -q -n 2
+
+      - name: Launch Streamlit and verify health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          streamlit run app.py \
+            --server.headless true \
+            --server.address 127.0.0.1 \
+            --server.port 8501 \
+            > streamlit-smoke.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          ok=0
+          for i in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health | grep -qi 'ok'; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "Streamlit failed to become healthy. Full log:"
+            cat streamlit-smoke.log
+            exit 1
+          fi
+
+          echo "Streamlit health check PASS"
+          tail -100 streamlit-smoke.log || true
+
+      - name: Upload Streamlit log if CI fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-ci-log
+          path: streamlit-smoke.log
+          if-no-files-found: ignore

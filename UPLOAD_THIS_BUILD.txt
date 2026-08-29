@@ -1,0 +1,32 @@
+SUPERCOMPATIBILITY LAB — R5 COMPLETE UPLOAD BUILD
+================================================
+
+This archive is already arranged as a GitHub repository root.
+
+IMPORTANT:
+1. Extract the ZIP on your computer.
+2. Upload THE CONTENTS of the extracted folder to the root of your GitHub repo.
+3. Make sure hidden folders are uploaded too, especially:
+      .github/workflows/ci.yml
+      .github/workflows/tests.yml
+      .streamlit/config.toml
+4. Overwrite existing files when GitHub asks.
+
+Both Streamlit entrypoints are self-contained and identical:
+    app.py
+    streamlit_app.py
+
+Therefore:
+- Your EXISTING Streamlit deployment pointing at app.py can work after it pulls this commit.
+- A FRESH deployment can use streamlit_app.py to avoid any stale app.py configuration.
+
+Expected build marker inside BOTH entrypoints:
+    2026-08-29-r5-fresh-entrypoint
+
+GitHub Actions:
+- .github/workflows/ci.yml = full R5 scientific self-test + real Streamlit boot/health check.
+- .github/workflows/tests.yml = fast R5 root/deployment sanity test.
+- Both trigger automatically on push.
+
+If Streamlit still shows "app.py line 9: from src.core import", it is NOT running this build,
+because line 9 in this build is not that import and app.py is self-contained.
