@@ -1,0 +1,24 @@
+name: Final Fast Sanity
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Confirm final entrypoint identity
+        run: |
+          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_final.py"
+          grep -q "2026-08-31-final-notation-explicit" supercompatibility_final.py
+      - name: Compile final entrypoints and notation/equation modules
+        run: python -m py_compile supercompatibility_final.py app.py streamlit_app.py src/equation_engine.py src/provenance.py src/reproducibility.py src/symbols.py scripts/verify_equation_parity.py

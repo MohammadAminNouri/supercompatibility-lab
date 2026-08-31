@@ -1,0 +1,92 @@
+name: Final Scientific + Notation + Streamlit CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Deployment preflight
+        run: python scripts/deployment_preflight.py
+
+      - name: Verify final entrypoint identity
+        run: |
+          test -f supercompatibility_final.py
+          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_final.py"
+          grep -q "2026-08-31-final-notation-explicit" supercompatibility_final.py
+
+      - name: Compile all Python
+        run: python -m compileall -q supercompatibility_final.py app.py streamlit_app.py supercompatibility_r7.py src scripts tests
+
+      - name: Equation and source parity audit
+        run: python scripts/verify_equation_parity.py
+
+      - name: Scientific self-test from embedded engine
+        run: python research_selftest.py
+
+      - name: Full automated test suite
+        run: python -m pytest -q
+
+      - name: Release numerical verification
+        run: python scripts/verify_release.py
+
+      - name: Embedded bundle integrity
+        run: python scripts/verify_embedded_app.py
+
+      - name: Start final Streamlit app and check health
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m streamlit run supercompatibility_final.py \
+            --server.headless true \
+            --server.address 127.0.0.1 \
+            --server.port 8501 \
+            > streamlit-final.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health | grep -qi ok; then
+              echo "Final Streamlit health PASS"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Final Streamlit failed to start"
+          cat streamlit-final.log
+          exit 1
+
+      - name: Upload Streamlit log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-final-log
+          path: streamlit-final.log
+          if-no-files-found: ignore
