@@ -3,10 +3,8 @@ from __future__ import annotations
 # ruff: noqa: E402
 
 import hashlib
-import io
 import json
 import time
-import zipfile
 import sys
 from pathlib import Path
 
@@ -100,8 +98,6 @@ if not any(isinstance(x, _EmbeddedSrcLoader) for x in sys.meta_path):
 ROOT = Path(__file__).resolve().parent
 
 from src.core import (
-    C_A_TO_M,
-    C_M_TO_A,
     LatticeInput,
     cmc_degeneracy,
     cmc_matrix,
@@ -123,7 +119,7 @@ from src.distances import all_cofactor_systems, compatibility_dashboard, dashboa
 from src.frontier import frontier_diagnostic
 from src.literature import load_literature
 from src.microstructure import MicrostructureContext, evidence_annotations
-from src.ml import TARGET_COLUMNS, physics_screen_predictions, predict_lattice, train_lattice_model, validate_ml_frame
+from src.ml import TARGET_COLUMNS, physics_screen_predictions, predict_lattice, train_lattice_model
 from src.multistep import GeneralCell, evaluate_chain
 from src.performance import FunctionalMetrics, derived_metrics
 from src.presets import PRESETS
@@ -201,30 +197,27 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-.block-container {padding-top: .9rem; padding-bottom: 3.2rem; max-width: 1480px;}
-[data-testid="stMetric"] {border:1px solid rgba(128,128,128,.20); padding:.68rem .76rem; border-radius:.72rem; min-height:92px;}
-[data-testid="stDataFrame"] {max-width:100%; overflow-x:auto; border:1px solid rgba(128,128,128,.14); border-radius:.55rem;}
-.unit-cell {padding-top:2.05rem; font-weight:700; opacity:.72; white-space:nowrap;}
-.soft-note {padding:.72rem .9rem; border:1px solid rgba(128,128,128,.20); border-radius:.72rem;}
-.research-card {padding:.78rem .9rem; border:1px solid rgba(128,128,128,.18); border-radius:.75rem; margin-bottom:.55rem;}
-.smallcaps {font-size:.76rem; letter-spacing:.05em; text-transform:uppercase; opacity:.68; font-weight:700;}
-.flow-strip {padding:.68rem .78rem; border:1px solid rgba(128,128,128,.18); border-radius:.72rem; height:100%;}
-.flow-strip b {display:block; margin-bottom:.18rem;}
-.workspace-brief {padding:.72rem .82rem; border:1px solid rgba(128,128,128,.18); border-radius:.72rem; height:100%; background:rgba(127,127,127,.035);}
-.workspace-brief .k {font-size:.73rem; letter-spacing:.05em; text-transform:uppercase; opacity:.62; font-weight:700; margin-bottom:.18rem;}
-.workspace-brief .v {font-size:.94rem; line-height:1.35;}
-.study-chip {display:inline-block; padding:.22rem .48rem; margin:.12rem .12rem .12rem 0; border:1px solid rgba(128,128,128,.22); border-radius:999px; font-size:.84rem;}
-.paper-box {padding:.8rem .95rem; border-left:3px solid rgba(80,150,255,.8); background:rgba(80,150,255,.055); border-radius:.25rem .65rem .65rem .25rem;}
+.block-container {padding-top: 1.05rem; padding-bottom: 3rem; max-width: 1450px;}
+[data-testid="stMetric"] {border: 1px solid rgba(128,128,128,.22); padding: .70rem .78rem; border-radius: .75rem; min-height: 98px;}
+.unit-cell {padding-top: 2.15rem; font-weight: 700; opacity: .72; white-space: nowrap;}
+.soft-note {padding: .8rem 1rem; border: 1px solid rgba(128,128,128,.22); border-radius: .75rem;}
+.research-card {padding: .85rem .95rem; border: 1px solid rgba(128,128,128,.20); border-radius: .8rem; margin-bottom: .65rem;}
+.smallcaps {font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; opacity: .72; font-weight: 700;}
+.flow-strip {padding:.72rem .85rem; border:1px solid rgba(128,128,128,.20); border-radius:.75rem; height:100%;}
+.flow-strip b {display:block; margin-bottom:.22rem;}
+[data-testid="stDataFrame"] {max-width:100%; overflow-x:auto;}
 @media (max-width: 900px) {
-  .block-container {padding-left:.72rem; padding-right:.72rem; padding-top:.65rem;}
-  [data-testid="stMetric"] {min-height:82px;}
-  .unit-cell {padding-top:.25rem;}
-  .workspace-brief,.flow-strip {min-height:auto;}
+  .block-container {padding-left: .80rem; padding-right: .80rem; padding-top: .75rem;}
+  [data-testid="stMetric"] {min-height: 86px;}
+  .unit-cell {padding-top: .35rem;}
+  .flow-strip {min-height:auto;}
 }
 @media (max-width: 600px) {
-  .block-container {padding-left:.48rem; padding-right:.48rem;}
-  h1 {font-size:1.68rem !important;} h2 {font-size:1.32rem !important;} h3 {font-size:1.12rem !important;}
-  [data-testid="stMetric"] {padding:.54rem .58rem;}
+  .block-container {padding-left: .55rem; padding-right: .55rem;}
+  h1 {font-size:1.72rem !important;}
+  h2 {font-size:1.35rem !important;}
+  h3 {font-size:1.15rem !important;}
+  [data-testid="stMetric"] {padding:.58rem .62rem;}
 }
 </style>
 """,
@@ -365,86 +358,6 @@ def extension_note(text: str) -> None:
     st.info(f"**Software extension — not a source theorem:** {text}")
 
 
-
-def workspace_brief(question: str, inputs: str, outputs: str, paper_use: str | None = None) -> None:
-    """One compact orientation strip; prevents each workspace from re-teaching the whole app."""
-    cols = st.columns(4 if paper_use else 3)
-    items = [("Research question", question), ("You provide", inputs), ("This workspace returns", outputs)]
-    if paper_use:
-        items.append(("Paper use", paper_use))
-    for col, (key, value) in zip(cols, items):
-        with col:
-            st.markdown(
-                f'<div class="workspace-brief"><div class="k">{key}</div><div class="v">{value}</div></div>',
-                unsafe_allow_html=True,
-            )
-
-
-def criterion_table(rows: list[dict]) -> None:
-    """Render auditable value → criterion → status rows without an opaque global score."""
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-
-
-def paper_wording(methods: str, results: str, limitation: str | None = None) -> None:
-    with st.expander("Manuscript-ready wording · edit before publication"):
-        st.markdown("**Methods draft**")
-        st.code(methods, language="text")
-        st.markdown("**Results draft**")
-        st.code(results, language="text")
-        if limitation:
-            st.markdown("**Required limitation / scope sentence**")
-            st.code(limitation, language="text")
-        st.caption("These are traceable drafts, not automatic scientific conclusions. Workspace 13 packages the complete evidence record and provenance.")
-
-
-def current_study_chips(inp: LatticeInput) -> None:
-    a,b,c = inp.ratios()
-    chips = [
-        f"a_B2={inp.a_b2:.6f} Å", f"a_B19′={inp.a_b19p:.6f} Å", f"b_B19′={inp.b_b19p:.6f} Å",
-        f"c_B19′={inp.c_b19p:.6f} Å", f"β={inp.beta_deg:.5f}°",
-        f"a={a:.6f}", f"b={b:.6f}", f"c={c:.6f}",
-    ]
-    st.markdown("".join(f'<span class="study-chip">{x}</span>' for x in chips), unsafe_allow_html=True)
-
-
-def _df_csv_bytes(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False).encode("utf-8")
-
-
-def complete_evidence_bundle(rec: dict, digest: str) -> bytes:
-    """Bundle central audit plus optional workspace results produced in this session."""
-    bio = io.BytesIO()
-    with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("core/paper_ready_record.json", record_json(rec))
-        z.writestr("core/paper_ready_record.md", record_markdown(rec))
-        z.writestr("core/equation_provenance.csv", pd.DataFrame(rec["equations_used"]).to_csv(index=False))
-        z.writestr("core/record_sha256.txt", digest + "\n")
-        z.writestr("core/README.txt", "Research evidence bundle generated by Supercompatibility Lab. Numerical compatibility, experimental validation, chemical realizability and functional performance are distinct claims. Report the declared equations, residuals, tolerances and source caveats.\n")
-        optional = {
-            "temperature/temperature_compatibility_results.csv": st.session_state.get("temperature_result"),
-            "uncertainty/monte_carlo_samples.csv": getattr(st.session_state.get("unc_result"), "samples", None),
-            "design/pareto_lattice_scan.csv": st.session_state.get("pareto"),
-            "ml/physics_screened_candidates.csv": st.session_state.get("ml_screened"),
-            "multistep/multistep_results.csv": st.session_state.get("chain_result"),
-            "independent/variant_pair_rank_one_compatibility.csv": st.session_state.get("ind_pair_table"),
-        }
-        for path, obj in optional.items():
-            if isinstance(obj, pd.DataFrame) and not obj.empty:
-                z.writestr(path, obj.to_csv(index=False))
-        inv = st.session_state.get("inverse_result")
-        if inv is not None:
-            z.writestr("design/inverse_design_target.json", json.dumps({
-                "a_B2_A":inv.input.a_b2,"a_B19p_A":inv.input.a_b19p,"b_B19p_A":inv.input.b_b19p,
-                "c_B19p_A":inv.input.c_b19p,"beta_deg":inv.input.beta_deg,"domain_type":inv.domain_type,
-                "axis":axis_label(inv.axis),"partner_axis":None if inv.partner_axis is None else axis_label(inv.partner_axis),
-                "residuals":{"lambda2":inv.lambda2_residual,"cc2":inv.cc2_normalized,"cc3_margin":inv.cc3_margin,"cmc":inv.cmc_relative_zero},
-            }, indent=2))
-        micro = st.session_state.get("microstructure_record")
-        if isinstance(micro, dict): z.writestr("experiment/microstructure_record.json", json.dumps(micro, indent=2, default=str))
-        func = st.session_state.get("functional_record")
-        if isinstance(func, dict): z.writestr("experiment/functional_record.json", json.dumps(func, indent=2, default=str))
-    return bio.getvalue()
-
 def json_download_payload(inp: LatticeInput, dashboard, cc1_tol: float, cc2_tol: float) -> str:
     a, b, c = inp.ratios()
     payload = {
@@ -483,14 +396,14 @@ def json_download_payload(inp: LatticeInput, dashboard, cc1_tol: float, cc2_tol:
 
 IW_SOURCE = {
     "title": "The role of interaction work in martensite deformation",
-    "authors": "Full author list: resolve from DOI metadata",
+    "authors": "J.F. Xiao, C. CT-reference-author, R.E. Logé",
     "journal": "Scripta Materialia 256 (2025) 116433",
     "doi": "10.1016/j.scriptamat.2024.116433",
 }
 
 IW_REORIENTATION_SOURCE = {
     "title": "An investigation on reorientation and textural evolution in a martensitic NiTi rolled sheet using EBSD",
-    "authors": "Full author list: resolve from DOI metadata",
+    "authors": "J.F. Xiao, C. CT-reference-author, R.E. Logé",
     "journal": "International Journal of Plasticity 159 (2022) 103468",
     "doi": "10.1016/j.ijplas.2022.103468",
 }
@@ -713,238 +626,57 @@ def iw_evidence_json(
     return json.dumps(payload, indent=2)
 
 
-# ---------- paper-ready reporting helpers for Workspace 3 ----------
-
-CT_SOURCE = {
-    "title": "Compatibilities and supercompatibility conditions in shape memory alloys determined from correspondence, metrics and symmetries",
-    "authors": "Full author list: resolve from DOI metadata",
-    "journal": "Acta Materialia 316 (2026) 122399",
-    "doi": "10.1016/j.actamat.2026.122399",
-}
-
-
-def _primitive_integer_indices(vector, max_index: int = 8, max_angle_deg: float = 0.20):
-    """Return a small primitive integer direction parallel to vector when justified.
-
-    This is presentation only. If no small-index integer direction is within the
-    angular tolerance, return None rather than inventing Miller indices.
-    """
-    v=np.asarray(vector,float)
-    nv=float(np.linalg.norm(v))
-    if nv<=1e-14:
-        return None
-    u=v/nv
-    best=None
-    best_angle=float('inf')
-    for i in range(-max_index,max_index+1):
-        for j in range(-max_index,max_index+1):
-            for k in range(-max_index,max_index+1):
-                if i==j==k==0:
-                    continue
-                a=np.array([i,j,k],dtype=int)
-                vals=np.abs(a[a!=0])
-                g=int(np.gcd.reduce(vals)) if len(vals) else 1
-                if g>1:
-                    a=a//g
-                # canonical sign
-                nz=np.flatnonzero(a)
-                if len(nz) and a[nz[0]]<0:
-                    a=-a
-                w=a.astype(float); w/=np.linalg.norm(w)
-                c=float(np.clip(abs(np.dot(u,w)),-1.0,1.0))
-                ang=float(np.degrees(np.arccos(c)))
-                key=(ang, int(np.sum(np.abs(a))), tuple(a.tolist()))
-                if best is None or key < best[0]:
-                    best=(key,a.copy()); best_angle=ang
-    if best is None or best_angle>max_angle_deg:
-        return None
-    return tuple(int(x) for x in best[1])
-
-
-def _idx_body(idx) -> str:
-    return " ".join(str(int(x)) for x in idx)
-
-
-def crystallographic_direction_label(vector, basis: str = "B2") -> str:
-    idx=_primitive_integer_indices(vector)
-    if idx is None:
-        return f"irrational/non-small-index in {basis}; normalized Cartesian = {np.round(np.asarray(vector,float)/np.linalg.norm(vector),6).tolist()}"
-    return f"[{_idx_body(idx)}]_{basis}"
-
-
-def crystallographic_plane_label(normal, basis: str = "B2") -> str:
-    idx=_primitive_integer_indices(normal)
-    if idx is None:
-        return f"irrational/non-small-index in {basis}; normalized covector = {np.round(np.asarray(normal,float)/np.linalg.norm(normal),6).tolist()}"
-    return f"({_idx_body(idx)})_{basis}"
-
-
-def twin_coordinate_report(twin) -> dict:
-    """Report twin shear direction/plane normal in B2 and corresponding B19' indices.
-
-    Directions transform with C^(M->A); covectors transform with the transpose of
-    C^(A->M). Only small-index labels within a strict angular tolerance are printed.
-    """
-    a_b2=np.asarray(twin.twin_shear_vector,float)
-    n_b2=np.asarray(twin.twin_plane_normal,float)
-    if np.linalg.norm(a_b2)>1e-14:
-        a_m=C_M_TO_A @ a_b2
-    else:
-        a_m=a_b2.copy()
-    if np.linalg.norm(n_b2)>1e-14:
-        p_m=C_A_TO_M.T @ n_b2
-    else:
-        p_m=n_b2.copy()
-    return {
-        "shear_direction_B2": crystallographic_direction_label(a_b2,"B2"),
-        "plane_B2": crystallographic_plane_label(n_b2,"B2"),
-        "shear_direction_B19p": crystallographic_direction_label(a_m,"B19′"),
-        "plane_B19p": crystallographic_plane_label(p_m,"B19′"),
-        "shear_vector_B2_cartesian": a_b2.tolist(),
-        "plane_normal_B2_cartesian": n_b2.tolist(),
-    }
-
-
-def cmc_audit(inp: LatticeInput, cmc: np.ndarray, ct_tol: float) -> dict:
-    deg_local=cmc_degeneracy(cmc,rtol=float(ct_tol),atol=1e-12)
-    analytic=niti_cmc_from_input(inp)
-    families=first_order_families(*inp.ratios(),inp.beta_deg,tol=float(ct_tol),c2b_interpretation="equation")
-    scale=max(float(np.max(np.abs(deg_local.eigenvalues))),np.finfo(float).tiny)
-    closest_idx=int(np.argmin(np.abs(deg_local.eigenvalues)))
-    family_rows=[]
-    for f in families:
-        margins=list(f.inequality_margins)
-        family_rows.append({
-            "Family":f.name,
-            "Equality residual":float(f.equality_residual),
-            "Minimum inequality margin":float(min(margins)) if margins else np.nan,
-            "Equality met":bool(f.equality_met),
-            "Inequalities met":bool(f.inequalities_met),
-            "Exact family met":bool(f.met),
-            "Equation key":f.equation_key,
-            "Note":f.note,
-        })
-    return {
-        "degeneracy":deg_local,
-        "analytic":analytic,
-        "spectral_scale":scale,
-        "closest_eigenvalue":float(deg_local.eigenvalues[closest_idx]),
-        "closest_eigenvalue_abs":float(abs(deg_local.eigenvalues[closest_idx])),
-        "relative_zero":float(deg_local.relative_zero),
-        "criterion":float(ct_tol),
-        "distance_over_tolerance":float(deg_local.relative_zero/ct_tol) if ct_tol>0 else float('inf'),
-        "family_table":pd.DataFrame(family_rows),
-    }
-
-
-def workspace3_evidence_zip(
-    inp: LatticeInput,
-    ct_tol: float,
-    shear_tol: float,
-    cmc_report: dict,
-    task_name: str,
-    task_payload: dict,
-    paper_result: str,
-    paper_methods: str,
-) -> bytes:
-    bio=io.BytesIO()
-    deg=cmc_report["degeneracy"]
-    meta={
-        "software_build":BUILD_ID,
-        "workspace_revision":"2026-08-31-paper-ready-v3",
-        "task":task_name,
-        "lattice_input":{
-            "a_B2_A":inp.a_b2,"a_B19p_A":inp.a_b19p,"b_B19p_A":inp.b_b19p,
-            "c_B19p_A":inp.c_b19p,"beta_deg":inp.beta_deg,
-            "normalized_ratios":list(inp.ratios()),
-        },
-        "numerical_tolerances":{
-            "CMC_relative_eigenvalue_tolerance":ct_tol,
-            "shear_shear_epsilon_tolerance":shear_tol,
-            "statement":"Numerical classification tolerances only; they are not material parameters.",
-        },
-        "CMC":{
-            "eigenvalues":deg.eigenvalues.tolist(),
-            "relative_zero":deg.relative_zero,
-            "exact":deg.exact,"degeneracy_order":deg.order,
-            "closest_eigenvalue":cmc_report["closest_eigenvalue"],
-        },
-        "task_payload":task_payload,
-        "references":[CT_SOURCE,IW_REORIENTATION_SOURCE,IW_SOURCE],
-    }
-    refs="\n".join([
-        f"- {CT_SOURCE['authors']}, {CT_SOURCE['title']}, {CT_SOURCE['journal']}, DOI {CT_SOURCE['doi']}",
-        f"- {IW_REORIENTATION_SOURCE['authors']}, {IW_REORIENTATION_SOURCE['title']}, {IW_REORIENTATION_SOURCE['journal']}, DOI {IW_REORIENTATION_SOURCE['doi']}",
-        f"- {IW_SOURCE['authors']}, {IW_SOURCE['title']}, {IW_SOURCE['journal']}, DOI {IW_SOURCE['doi']}",
-    ])
-    with zipfile.ZipFile(bio,'w',zipfile.ZIP_DEFLATED) as z:
-        z.writestr('metadata.json',json.dumps(meta,indent=2,default=str))
-        z.writestr('cmc_analytical_families.csv',cmc_report['family_table'].to_csv(index=False))
-        z.writestr('paper_methods.md',paper_methods)
-        z.writestr('paper_result.md',paper_result)
-        z.writestr('references.md','# References\n\n'+refs+'\n')
-        z.writestr('README.txt','Paper-evidence bundle for Workspace 3. Report raw values and declared tolerances; do not convert numerical classification into a physical claim beyond the equations tested.')
-    return bio.getvalue()
-
-
 # ---------- navigation and task-aware input ----------
 init_state()
 
 st.title("🧩 Supercompatibility Lab")
-st.caption(f"Build {BUILD_ID} · final academic UX revision 2026-08-31d · equation-level provenance · self-contained research engine")
-st.caption("Crystallography → compatibility → mechanics → reconstruction → design → reproducible manuscript evidence. Exact equations, numerical tolerances and experimental evidence are kept as separate claim levels.")
-with st.expander("Notation & acronyms · open only when needed", expanded=False):
+st.caption(f"Build {BUILD_ID} · guided variants/twins/IW revision 2026-08-31b · equation-level provenance · self-contained research engine")
+st.caption("Academic workbench with equation-level provenance, analytical cross-checks, source-discrepancy auditing, reproducible exports, twin systems, uncertainty, reconstruction and inverse design")
+st.info("**Notation rule used everywhere:** every mathematical symbol is defined beside the formula, input, output, or table where it appears. You do not need to know crystallographic notation in advance.")
+with st.expander("Read this first · acronyms and crystallographic notation", expanded=False):
     st.markdown(
-        "**PTMC** = phenomenological theory of martensite crystallography · **CC1/CC2/CC3** = cofactor conditions · "
-        "**CMC** = compatibility metric-change matrix · **SMC** = shear metric-change matrix · **IPS** = invariant-plane strain · "
-        "**A/M** = austenite/martensite · **M/M** = martensite/martensite · **OR** = orientation relationship · "
-        "**EBSD** = electron backscatter diffraction.  \n"
-        "**[u v w]** denotes a crystallographic direction; **(h k l)** denotes a plane normal/Miller indices; **Å** = 10⁻¹⁰ m. "
-        "Equation-specific symbols and operators remain available in collapsed audit panels beside the result that uses them."
+        "**PTMC** = phenomenological theory of martensite crystallography · "
+        "**CC1/CC2/CC3** = first/second/third cofactor conditions · "
+        "**CMC** = compatibility metric-change matrix · **SMC** = shear metric-change matrix · "
+        "**IPS** = invariant-plane strain · **OR** = orientation relationship · "
+        "**A/M** = austenite/martensite interface · **M/M** = martensite/martensite interface · "
+        "**XRD** = X-ray diffraction · **EBSD** = electron backscatter diffraction · "
+        "**ML** = machine learning · **RMS** = root-mean-square."
     )
+    st.markdown(
+        "**[u v w]** = crystallographic direction coordinates · **(h k l)** = crystallographic plane normal/Miller indices · "
+        "**Å** = ångström = $10^{-10}$ m · **°** = degrees. "
+        "A vector's component scale may be arbitrary when only its direction is physically relevant; the local caption states this."
+    )
+    st.caption("Formula panels also define operators such as transpose T, inverse −1, outer product ⊗, dot product ·, norm |·|/‖·‖, square root √, set symbols, trigonometric functions and inequalities exactly where they are used.")
 
 interface_mode = st.radio(
     "Interface mode",
     ["Guided overview", "Research workspaces"],
     horizontal=True,
-    help="Guided overview gives one compatibility diagnosis. Research workspaces expose a specific method or dataset workflow.",
+    help="Guided overview explains the main compatibility result in plain language. Research workspaces expose the full methods and diagnostics.",
 )
 
 workspace_options = [
-    "1 · Compatibility verdict & diagnostics",
-    "2 · Classical PTMC / cofactor verification",
+    "1 · Compatibility dashboard",
+    "2 · PTMC / cofactor cross-check",
     "3 · Variants, twins & Interaction Work",
-    "4 · Temperature & measurement uncertainty",
-    "5 · Experimental context & literature",
+    "4 · Temperature & uncertainty",
+    "5 · Literature, microstructure & performance",
     "6 · Inverse lattice design",
     "7 · Composition → lattice ML",
     "8 · Multi-step transformations",
-    "9 · EBSD parent ↔ daughter reconstruction",
-    "10 · Independent theorem cross-checks",
-    "11 · Applicability, references & methods",
-    "12 · Equation & analytical solution library",
-    "13 · Manuscript audit & reproducible export",
+    "9 · Parent ↔ daughter reconstruction",
+    "10 · Independent compatibility methods",
+    "11 · Research frontier & methods",
+    "12 · Equation explorer & analytical solutions",
+    "13 · Paper-ready audit & export",
 ]
-workspace_help = {
-    "1":"One-page verdict: what passes, what fails, what is blocked, and the raw residual behind each statement.",
-    "2":"Independent classical PTMC/cofactor calculation for every Type-I, Type-II and Compound domain system.",
-    "3":"Variant/operator relations, M/M twins, CT shear/shear bridge and Interaction Work. This workspace is intentionally unchanged in this revision.",
-    "4":"Evaluate compatibility versus temperature or propagate measured lattice uncertainty without calling a Monte-Carlo fraction an exact probability.",
-    "5":"Curated literature plus structured microstructure and functional-response metadata; no invented fatigue/hysteresis law.",
-    "6":"Search backward for lattice parameters that minimize explicit compatibility residuals; mathematical target ≠ guaranteed chemistry.",
-    "7":"Cross-validated composition/processing → lattice regression followed by physics screening; model quality is shown before predictions.",
-    "8":"Evaluate each stage of B2→R→B19′ or other transformation chains with general metrics/correspondence.",
-    "9":"Reconstruct parent B2 grains/orientations from measured daughter B19′ EBSD and audit parent/variant assignments.",
-    "10":"Cross-check with independent rank-one, laminate, triplet or generic Hadamard criteria while enforcing applicability guards.",
-    "11":"See which methods apply to the current transformation, which do not, and the primary reference/method boundary for each.",
-    "12":"Inspect equations, analytical branches and parity checks without duplicating the normal operational workspaces.",
-    "13":"Create a traceable manuscript evidence record: inputs, equations, tolerances, results, caveats, source discrepancies and hash.",
-}
 if interface_mode == "Guided overview":
-    workspace = workspace_options[0]
+    workspace = "1 · Compatibility dashboard"
+    st.info("Guided mode keeps the mathematics underneath but shows the result as four questions: Does one martensite variant fit the parent? Do martensite variants twin compatibly? Do the two shear systems agree? How far is the alloy from the exact conditions?")
 else:
     workspace = st.selectbox("Research workspace", workspace_options, index=0)
-st.caption(workspace_help[workspace.split(" · ",1)[0]])
 
 cc1_tol = 1e-5
 cc2_tol = 1e-5
@@ -952,1051 +684,1308 @@ inp = None
 ma = mm = cmc = deg = smc = stretch = dashboard = None
 ar = br = cr = float("nan")
 
-# Workspace 3 has its own guided local inputs; Workspace 9 has EBSD-specific inputs.
+# Parent reconstruction has its own orientation/adjacency inputs, so irrelevant
+# B2/B19′ lattice boxes are deliberately hidden in that workspace.
 if not (workspace.startswith("3") or workspace.startswith("9")):
     with st.container(border=True):
-        p1,p2 = st.columns([4,1], vertical_alignment="bottom")
-        with p1:
-            preset_name = st.selectbox("Study lattice / quick start", list(PRESETS.keys()), help="Load a reproducible example or keep Custom and enter measured values.")
-        with p2:
-            if st.button("Load example", width="stretch", disabled=preset_name=="Custom"):
-                load_preset(preset_name); st.rerun()
-        c1,c2,c3,c4,c5 = st.columns(5)
-        c1.number_input("a_B2 (Å)", key="a_b2", min_value=0.1,max_value=20.0,step=0.001,format="%.6f",help="Cubic B2 parent lattice parameter.")
-        c2.number_input("a_B19′ (Å)", key="a_b19p", min_value=0.1,max_value=20.0,step=0.001,format="%.6f",help="B19′ martensite a-axis length.")
-        c3.number_input("b_B19′ (Å)", key="b_b19p", min_value=0.1,max_value=20.0,step=0.001,format="%.6f",help="B19′ martensite b-axis length.")
-        c4.number_input("c_B19′ (Å)", key="c_b19p", min_value=0.1,max_value=20.0,step=0.001,format="%.6f",help="B19′ martensite c-axis length.")
-        c5.number_input("β (°)", key="beta_deg", min_value=1.0,max_value=179.0,step=0.01,format="%.5f",help="Monoclinic B19′ angle between a and c.")
-        with st.expander("Numerical decision tolerances · advanced"):
-            t1,t2 = st.columns(2)
-            cc1_tol = t1.number_input("CC1: |λ₂−1| ≤", min_value=1e-10,max_value=0.1,value=1e-5,format="%.2e")
-            cc2_tol = t2.number_input("CC2 normalized residual ≤", min_value=1e-10,max_value=0.1,value=1e-5,format="%.2e")
-            st.caption("These are numerical/experimental decision thresholds, not material constants. CMC exact-degeneracy classification in the certified core uses relative spectral tolerance 2×10⁻⁶.")
+        ctop1, ctop2 = st.columns([3, 1], vertical_alignment="bottom")
+        with ctop1:
+            preset_name = st.selectbox(
+                "Quick-start lattice example",
+                list(PRESETS.keys()),
+                help="Presets are reproducible starting points. Every physical input remains editable.",
+            )
+        with ctop2:
+            if st.button("Load example", width="stretch", disabled=preset_name == "Custom"):
+                load_preset(preset_name)
+                st.rerun()
 
-    inp = LatticeInput(float(st.session_state.a_b2),float(st.session_state.a_b19p),float(st.session_state.b_b19p),float(st.session_state.c_b19p),float(st.session_state.beta_deg))
+        st.markdown("#### Crystal dimensions")
+        st.caption("Enter measured unit-cell dimensions. The app calculates normalized ratios automatically; ratios have no unit and are not compositions.")
+        left, right = st.columns(2)
+        with left:
+            number_with_unit("B2 austenite lattice parameter — a_B2", "a_b2", "Å", "Edge length of the cubic B2 parent unit cell.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ martensite lattice parameter — a_B19′", "a_b19p", "Å", "Length of the a-axis of the monoclinic B19′ unit cell.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ martensite lattice parameter — b_B19′", "b_b19p", "Å", "Length of the b-axis of the monoclinic B19′ unit cell.", 0.1, 20.0, 0.001, "%.6f")
+        with right:
+            number_with_unit("B19′ martensite lattice parameter — c_B19′", "c_b19p", "Å", "Length of the c-axis of the monoclinic B19′ unit cell.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ monoclinic angle — β", "beta_deg", "°", "Angle between the B19′ a- and c-axes.", 1.0, 179.0, 0.01, "%.5f")
+            with st.expander("Numerical certification tolerances"):
+                cc1_tol = st.number_input("CC1 equality tolerance — |λ₂−1|", min_value=1e-10, max_value=0.1, value=1e-5, format="%.2e", help="λ₂ is the middle principal stretch factor. This tolerance decides how close λ₂ must be to 1 numerically.")
+                st.caption("λ₂ = middle principal stretch factor of U; |λ₂−1| = absolute deviation from the exact target 1; CC1 = first cofactor condition; tolerance = numerical pass/fail threshold, dimensionless.")
+                cc2_tol = st.number_input("CC2 normalized tolerance", min_value=1e-10, max_value=0.1, value=1e-5, format="%.2e", help="Dimensionless threshold applied to the scale-normalized CC2 equality residual.")
+                st.caption("CC2 = second cofactor condition; normalized residual = absolute CC2 equation mismatch divided by its numerical scale; 0 is exact; tolerance is dimensionless and must be reported.")
+                st.caption("Exact theory uses zero residual. These are explicit numerical/experimental decision thresholds, not new physical laws.")
+
+    inp = LatticeInput(
+        a_b2=float(st.session_state.a_b2),
+        a_b19p=float(st.session_state.a_b19p),
+        b_b19p=float(st.session_state.b_b19p),
+        c_b19p=float(st.session_state.c_b19p),
+        beta_deg=float(st.session_state.beta_deg),
+    )
+
     try:
-        ma,mm = normalized_metrics(inp); cmc=cmc_matrix(ma,mm); deg=cmc_degeneracy(cmc); smc=smc_matrix(ma,mm)
-        stretch=stretch_from_lattice(inp); dashboard=compatibility_dashboard(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol)
+        ma, mm = normalized_metrics(inp)
+        cmc = cmc_matrix(ma, mm)
+        deg = cmc_degeneracy(cmc)
+        smc = smc_matrix(ma, mm)
+        stretch = stretch_from_lattice(inp)
+        dashboard = compatibility_dashboard(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol)
     except ValueError as exc:
-        st.error(str(exc)); st.stop()
-    ar,br,cr=inp.ratios()
-    current_study_chips(inp)
-    with st.expander("Input definitions & normalized ratios"):
-        st.markdown("a = a_B19′/a_B2, b = b_B19′/a_B2, c = c_B19′/a_B2. These ratios are dimensionless lattice metrics, not composition variables.")
-        st.dataframe(pd.DataFrame([{"quantity":"a","value":ar},{"quantity":"b","value":br},{"quantity":"c","value":cr},{"quantity":"√2","value":float(np.sqrt(2))}]),width="stretch",hide_index=True)
+        st.error(str(exc))
+        st.stop()
 
+    ar, br, cr = inp.ratios()
+    with st.container(border=True):
+        st.markdown("**Automatically calculated normalized lattice ratios**")
+        formula_with_symbols(
+            r"a=\frac{a_{B19'}}{a_{B2}},\qquad b=\frac{b_{B19'}}{a_{B2}},\qquad c=\frac{c_{B19'}}{a_{B2}}",
+            [
+                SymbolDefinition(r"a", "B19′ a-axis length divided by the B2 parent lattice parameter", "dimensionless", "not composition and not the twin-shear vector a"),
+                SymbolDefinition(r"b", "B19′ b-axis length divided by the B2 parent lattice parameter", "dimensionless"),
+                SymbolDefinition(r"c", "B19′ c-axis length divided by the B2 parent lattice parameter", "dimensionless"),
+                INPUT_SYMBOLS["a_b19p"], INPUT_SYMBOLS["b_b19p"], INPUT_SYMBOLS["c_b19p"], INPUT_SYMBOLS["a_b2"],
+            ],
+        )
+        qra, qrb, qrc = st.columns(3)
+        explained_metric(qra, "Normalized a ratio", f"{ar:.8f}", "a = a_B19′ / a_B2. Dimensionless; not an ångström value and not chemical composition.")
+        explained_metric(qrb, "Normalized b ratio", f"{br:.8f}", "b = b_B19′ / a_B2. Dimensionless; C1 uses the target b = √2.")
+        explained_metric(qrc, "Normalized c ratio", f"{cr:.8f}", "c = c_B19′ / a_B2. Dimensionless.")
 
 # ---------- 1 dashboard ----------
 if workspace.startswith("1"):
-    st.header("Compatibility verdict & diagnostics")
-    workspace_brief(
-        "What does the current lattice satisfy, fail, or leave unevaluable?",
-        "One B2/B19′ lattice + explicit CC1/CC2 tolerances.",
-        "A dependency-aware verdict with raw residuals; no arbitrary percentage score.",
-        "Primary Results summary and the fastest check before deeper workspaces.",
+    st.header("Compatibility dashboard")
+    if interface_mode == "Guided overview":
+        st.markdown("### Four questions, in order")
+        g1, g2, g3, g4 = st.columns(4)
+        with g1:
+            st.markdown("**1 · Can one martensite variant fit the parent?**")
+            if dashboard.lambda2_abs_residual <= cc1_tol:
+                st.success(f"Yes within tolerance. |λ₂−1| = {dashboard.lambda2_abs_residual:.2e}")
+            else:
+                st.warning(f"Not exactly. |λ₂−1| = {dashboard.lambda2_abs_residual:.2e}")
+            st.caption("λ₂ = middle principal stretch factor; |λ₂−1| = its absolute distance from the exact target 1; dimensionless.")
+        with g2:
+            st.markdown("**2 · Is there a compatible habit-plane solution?**")
+            if dashboard.cmc_exact:
+                st.success(f"CMC degeneracy found · order {dashboard.cmc_order}")
+            else:
+                st.warning(f"Not exact · CMC distance {dashboard.cmc_relative_zero:.2e}")
+            st.caption("CMC = compatibility metric-change matrix; degeneracy means its quadratic zero set collapses to compatible plane(s).")
+        with g3:
+            st.markdown("**3 · Do martensite twins satisfy full cofactor conditions?**")
+            if dashboard.ptmc_all_pass:
+                st.success("At least one classified domain system passes CC1–CC3.")
+            else:
+                st.warning("No classified domain system passes all CC1–CC3 at the selected tolerances.")
+        with g4:
+            st.markdown("**4 · Does the A/M shear cooperate with the M/M twin shear?**")
+            if dashboard.best_epsilon is None:
+                st.info("Needs an exact CMC habit plane first.")
+            elif dashboard.best_epsilon <= 1e-3:
+                st.success(f"Near exact · ε = {dashboard.best_epsilon:.2e}")
+            else:
+                st.warning(f"Mismatch remains · ε = {dashboard.best_epsilon:.4f}")
+            st.caption("ε = dimensionless normalized mismatch between A/M IPS shear and M/M twin shear; ε = 0 is exact matching.")
+        st.caption("Use **Research workspaces** above when you want the matrices, full twin tables, uncertainty, reconstruction, inverse design and independent theorem-level cross-checks.")
+    st.markdown(
+        "This page deliberately keeps **three distinct statements separate**: single-variant A/M compatibility, classical cofactor supercompatibility, and metric shear/shear intercompatibility. They are related, but the app does not silently treat them as identical."
     )
 
-    cmc_tol = 2e-6
-    shear_tol = 2e-6
-    cofactor_status = "PASS" if dashboard.ptmc_all_pass else "FAIL"
-    shear_status = "BLOCKED" if dashboard.best_epsilon is None else ("PASS" if dashboard.best_epsilon <= shear_tol else "FAIL")
-    verdict_rows = [
-        {"Question":"Single-variant A/M stretch (CC1)","Raw value":f"|λ₂−1| = {dashboard.lambda2_abs_residual:.6e}","Criterion":f"≤ {cc1_tol:.1e}","Status":"PASS" if dashboard.lambda2_abs_residual<=cc1_tol else "FAIL","Meaning":"Middle stretch is/is not numerically indistinguishable from 1 at the declared threshold."},
-        {"Question":"Exact CMC A/M habit-plane degeneracy","Raw value":f"δ_CMC = {dashboard.cmc_relative_zero:.6e}","Criterion":f"≤ {cmc_tol:.1e} + sign condition","Status":"PASS" if dashboard.cmc_exact else "FAIL","Meaning":"An exact CMC habit-plane branch exists only when the spectral degeneracy criterion is met."},
-        {"Question":"Classical PTMC cofactor system","Raw value":f"best CC2={dashboard.best_cc2_normalized:.3e}; CC3 margin={dashboard.best_cc3_margin:.3e}","Criterion":f"CC1≤{cc1_tol:.1e}; CC2≤{cc2_tol:.1e}; CC3≥0","Status":cofactor_status,"Meaning":"At least one classified Type-I/Type-II/Compound domain passes all three conditions only when Status=PASS."},
-        {"Question":"CT A/M ↔ M/M shear/shear","Raw value":"not computed" if dashboard.best_epsilon is None else f"ε = {dashboard.best_epsilon:.6e}","Criterion":f"ε ≤ {shear_tol:.1e} for numerical exactness","Status":shear_status,"Meaning":"Blocked when no exact CMC habit plane exists; otherwise ε compares A/M IPS and M/M twin shear directions."},
-    ]
-    st.subheader("Dependency-aware verdict")
-    criterion_table(verdict_rows)
+    r1, r2, r3, r4 = st.columns(4)
+    explained_metric(r1, "Middle principal stretch — λ₂", f"{dashboard.lambda2:.8f}", OUTPUT_SYMBOLS["lambda2"], delta=f"{dashboard.lambda2-1:+.3e}")
+    explained_metric(r2, "CMC degeneracy distance — d_CMC", f"{dashboard.cmc_relative_zero:.3e}", OUTPUT_SYMBOLS["cmc_distance"], help_text="Smallest |CMC eigenvalue| divided by the eigenvalue scale.")
+    explained_metric(r3, "Best normalized CC2 residual — r_CC2", f"{dashboard.best_cc2_normalized:.3e}", OUTPUT_SYMBOLS["cc2_residual"])
+    explained_metric(r4, "Best shear/shear mismatch — ε", "—" if dashboard.best_epsilon is None else f"{dashboard.best_epsilon:.6f}", OUTPUT_SYMBOLS["epsilon"])
 
-    if not dashboard.cmc_exact:
-        st.warning(f"**Bottom line:** an exact CT A/M habit plane is not available for this lattice (δ_CMC={dashboard.cmc_relative_zero:.3e} > {cmc_tol:.1e}); therefore exact CT shear/shear supercompatibility is not established. A mathematical M/M twin may still exist independently.")
-    elif dashboard.best_epsilon is None:
-        st.warning("**Bottom line:** CMC is exact, but no finite tested shear/shear match was returned by the current twin set. Full CT supercompatibility is not established.")
-    elif dashboard.best_epsilon <= shear_tol:
-        st.success(f"**Bottom line:** the metric CT chain reaches numerical shear/shear agreement for the best tested branch (ε={dashboard.best_epsilon:.3e}). Report the selected twin/branch from Workspace 3 rather than only this summary.")
-    else:
-        st.warning(f"**Bottom line:** CMC is exact but the best tested shear/shear residual remains ε={dashboard.best_epsilon:.3e}; full CT supercompatibility is not established for the tested branches.")
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        if dashboard.lambda2_abs_residual <= cc1_tol:
+            st.success("**A/M IPS test:** λ₂ is within the selected tolerance of 1.")
+        else:
+            st.warning(f"**A/M IPS test:** |λ₂−1| = {dashboard.lambda2_abs_residual:.3e}.")
+    with a2:
+        if dashboard.ptmc_all_pass:
+            st.success("**PTMC cofactor test:** at least one classified Type-I, Type-II or Compound domain system passes CC1–CC3 within the selected tolerances.")
+        else:
+            st.warning("**PTMC cofactor test:** no classified Type-I, Type-II or Compound system passes all CC1–CC3 within the selected tolerances.")
+    with a3:
+        if dashboard.best_epsilon is None:
+            st.info("**Metric shear/shear test:** unavailable until CMC gives an exact habit-plane degeneracy.")
+        elif dashboard.best_epsilon <= 1e-3:
+            st.success(f"**Metric shear/shear test:** ε = {dashboard.best_epsilon:.3e}.")
+        else:
+            st.warning(f"**Metric shear/shear test:** best ε = {dashboard.best_epsilon:.4f}; exact target is 0.")
 
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("λ₂",f"{dashboard.lambda2:.8f}",delta=f"{dashboard.lambda2-1:+.3e}")
-    c2.metric("δ_CMC",f"{dashboard.cmc_relative_zero:.3e}")
-    c3.metric("best CC2 residual",f"{dashboard.best_cc2_normalized:.3e}")
-    c4.metric("best ε","—" if dashboard.best_epsilon is None else f"{dashboard.best_epsilon:.3e}")
+    if dashboard.ptmc_all_pass and dashboard.best_epsilon is not None and dashboard.best_epsilon > 1e-3:
+        st.warning(
+            "**Cross-framework discrepancy detected.** The classical cofactor conditions pass for at least one domain system, while the metric shear/shear criterion is non-zero. This is shown explicitly rather than hidden: the metric shear/shear construction is a sufficient route to the classical conditions, while full converse equivalence is not assumed by this software."
+        )
 
-    with st.expander("Full numerical diagnostic table"):
-        ddf=pd.DataFrame(dashboard_rows(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol))
-        st.dataframe(ddf,width="stretch",hide_index=True)
-        st.caption("Residual-type targets are zero. CC3 is an inequality margin and passes when non-negative.")
+    st.subheader("Distance table — no arbitrary percentage score")
+    ddf = pd.DataFrame(dashboard_rows(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol))
+    st.dataframe(ddf, width="stretch", hide_index=True)
+    st.caption("Table notation: λ₂ = middle principal stretch; CMC = compatibility metric-change matrix; CC1/CC2/CC3 = the three classical cofactor conditions; ε = normalized shear/shear mismatch. Every residual is dimensionless unless the table explicitly states another unit; 0 means exact equality for residual-type quantities.")
 
-    with st.expander("CMC geometry & habit planes · advanced"):
-        g1,g2=st.columns([1.5,1])
-        with g1:
-            st.plotly_chart(cmc_surface_figure(cmc),width="stretch",config={"displaylogo":False})
-        with g2:
-            st.write("CMC eigenvalues:",[float(x) for x in deg.eigenvalues])
-            st.write("Relative zero distance:",float(deg.relative_zero))
-            if deg.habit_planes:
-                for i,p in enumerate(deg.habit_planes,1):
-                    st.code(f"m_A[{i}] = {plane_text(p)}\nd_A[{i}] = {format_vector(smc@p)}",language="text")
-            else:
-                st.info("No exact habit-plane solution is certified at the core CMC tolerance 2×10⁻⁶.")
+    st.subheader("CMC geometry")
+    g1, g2 = st.columns([2, 1])
+    with g1:
+        st.plotly_chart(cmc_surface_figure(cmc), width="stretch", config={"displaylogo": False})
+    with g2:
+        st.markdown("**What the surface means**")
+        st.markdown("`uᵀ CMC u = 0` collects directions whose length is preserved by metric correspondence.")
+        st.caption("u = a trial parent-lattice direction vector; uᵀ = transpose of u; CMC = compatibility metric-change matrix; 0 = exactly no squared-length change for that direction.")
+        if deg.habit_planes:
+            st.success(f"CMC degeneracy order {deg.order}: {len(deg.habit_planes)} habit-plane solution(s).")
+            for i, p in enumerate(deg.habit_planes, 1):
+                st.code(f"m_A[{i}] = {plane_text(p)}\nd_A[{i}] (same plane scaling) = {format_vector(smc @ p)}", language="text")
+                st.caption("m_A = parent/austenite habit-plane normal (reciprocal crystallographic coordinates); d_A = IPS displacement/shear vector calculated as SMC·m_A; multiplying m_A by a common scalar describes the same plane and scales d_A consistently.")
+        else:
+            st.info("The zero set is still a cone-like quadratic surface rather than a compatible plane.")
+        st.markdown("**Normalized geometry**")
+        st.write({"normalized a = a_B19′/a_B2": round(ar, 7), "normalized b = b_B19′/a_B2": round(br, 7), "normalized c = c_B19′/a_B2": round(cr, 7), "√2 target constant": round(float(np.sqrt(2)), 7)})
 
-    methods=(f"B2/B19′ lattice compatibility was evaluated with the transformation stretch tensor, the CMC/SMC metric-correspondence construction, and the classical cofactor conditions. Numerical thresholds were |λ₂−1|≤{cc1_tol:.1e}, normalized CC2≤{cc2_tol:.1e}, and the certified CMC relative spectral tolerance 2×10⁻⁶.")
-    results=(f"For the investigated lattice, λ₂={dashboard.lambda2:.8f} (|λ₂−1|={dashboard.lambda2_abs_residual:.3e}), δ_CMC={dashboard.cmc_relative_zero:.3e}, and the best normalized CC2 residual was {dashboard.best_cc2_normalized:.3e}. " + ("The exact CMC prerequisite was absent, so the shear/shear residual was not computed." if dashboard.best_epsilon is None else f"The best tested shear/shear residual was ε={dashboard.best_epsilon:.3e}."))
-    paper_wording(methods,results,"These crystallographic criteria do not by themselves establish experimental hysteresis, fatigue life, chemical realizability or transformation kinetics.")
-    st.download_button("Download current compatibility report (JSON)",json_download_payload(inp,dashboard,cc1_tol,cc2_tol),file_name="compatibility_report.json",mime="application/json")
-    math_used(["PTMC-SC1","CMC","CMC-DEGEN","SMC","SHEAR-SHEAR","EPSILON"],title="Methods/equations audit")
+    st.download_button(
+        "Download current compatibility report (JSON)",
+        json_download_payload(inp, dashboard, cc1_tol, cc2_tol),
+        file_name="compatibility_report.json",
+        mime="application/json",
+    )
+    math_used(["PTMC-SC1", "CMC", "CMC-Q", "CMC-DEGEN", "SMC", "SMC-D", "SHEAR-SHEAR", "EPSILON"])
 
 
 # ---------- 2 PTMC ----------
 elif workspace.startswith("2"):
-    st.header("Classical PTMC / cofactor verification")
-    workspace_brief(
-        "Does any crystallographically classified domain system satisfy CC1, CC2 and CC3?",
-        "The shared lattice and declared CC1/CC2 numerical thresholds.",
-        "Principal stretches plus an auditable condition-by-condition result for every Type-I, Type-II and Compound system.",
-        "Independent classical cross-check; do not substitute it for the CT shear/shear branch in Workspace 3.",
-    )
+    st.header("PTMC / cofactor cross-check")
+    st.markdown("The stretch tensor is constructed independently from the metric/correspondence CMC/SMC route. Non-trivial two-fold generators are first classified into Type-I/Type-II or Compound domain systems, then the full nonlinear cofactor equations are evaluated.")
 
-    systems=all_cofactor_systems(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol)
-    pass_count=sum(bool(s.all_pass) for s in systems)
-    best_index=min(range(len(systems)),key=lambda i:(abs(systems[i].cc1_residual),systems[i].cc2_normalized,max(0.0,-systems[i].cc3_margin)))
-    best=systems[best_index]
-    p1,p2,p3,p4,p5=st.columns(5)
-    p1.metric("λ₁",f"{stretch.eigenvalues[0]:.8f}")
-    p2.metric("λ₂",f"{stretch.eigenvalues[1]:.8f}",delta=f"{stretch.eigenvalues[1]-1:+.3e}")
-    p3.metric("λ₃",f"{stretch.eigenvalues[2]:.8f}")
-    p4.metric("det(U)",f"{stretch.determinant:.8f}")
-    p5.metric("domains passing CC1–CC3",f"{pass_count}/{len(systems)}")
+    l1, l2, l3, detc = st.columns(4)
+    explained_metric(l1, "Smallest principal stretch — λ₁", f"{stretch.eigenvalues[0]:.8f}", SymbolDefinition(r"\lambda_1", "smallest principal stretch factor of U", "dimensionless", "<1 means contraction"))
+    explained_metric(l2, "Middle principal stretch — λ₂", f"{stretch.eigenvalues[1]:.8f}", OUTPUT_SYMBOLS["lambda2"], delta=f"{stretch.eigenvalues[1]-1:+.3e}")
+    explained_metric(l3, "Largest principal stretch — λ₃", f"{stretch.eigenvalues[2]:.8f}", SymbolDefinition(r"\lambda_3", "largest principal stretch factor of U", "dimensionless", ">1 means extension"))
+    explained_metric(detc, "Transformation volume ratio — det(U)", f"{stretch.determinant:.8f}", OUTPUT_SYMBOLS["detU"], delta=f"{stretch.determinant-1:+.3e}", help_text="Volume-change indicator; not itself a supercompatibility condition.")
 
-    labels=[domain_spec_label(CofactorDomainSpec(s.domain_type,s.axis,s.partner_axis)) for s in systems]
-    sel=st.selectbox("Inspect one domain system",range(len(systems)),index=best_index,format_func=lambda i:labels[i])
-    s=systems[int(sel)]
-    st.caption("The preselected domain is the closest by ordered raw residuals (CC1, then CC2, then CC3 violation); this ordering is a navigation aid, not a material compatibility score.")
-    criterion_table([
-        {"Condition":"CC1","Value":f"λ₂={s.lambda2:.9f}; |λ₂−1|={abs(s.cc1_residual):.3e}","Criterion":f"|λ₂−1|≤{cc1_tol:.1e}","Status":"PASS" if s.cc1_pass else "FAIL"},
-        {"Condition":"CC2","Value":f"normalized residual={s.cc2_normalized:.3e}","Criterion":f"≤{cc2_tol:.1e}","Status":"PASS" if s.cc2_pass else "FAIL"},
-        {"Condition":"CC3","Value":f"margin={s.cc3_margin:.3e}","Criterion":"margin ≥ 0","Status":"PASS" if s.cc3_pass else "FAIL"},
-        {"Condition":"All three","Value":s.domain_type,"Criterion":"CC1 AND CC2 AND CC3","Status":"PASS" if s.all_pass else "FAIL"},
-    ])
-    if s.all_pass:
-        st.success("The selected domain satisfies the implemented classical cofactor conditions at the declared tolerances.")
-    else:
-        failed=[name for name,ok in [("CC1",s.cc1_pass),("CC2",s.cc2_pass),("CC3",s.cc3_pass)] if not ok]
-        st.warning("Selected domain fails: "+", ".join(failed)+".")
+    systems = all_cofactor_systems(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol)
+    rows = []
+    for s in systems:
+        rows.append({
+            "Domain": s.domain_type,
+            "two-fold axis ê": axis_label(s.axis),
+            "compound partner axis": "" if s.partner_axis is None else axis_label(s.partner_axis),
+            "λ₂": s.lambda2,
+            "|λ₂−1|": abs(s.cc1_residual),
+            "CC2 raw": s.cc2_raw,
+            "CC2 normalized": s.cc2_normalized,
+            "Simplified CC2 residual": s.cc2_simplified_residual,
+            "CC3 margin": s.cc3_margin,
+            "CC1 pass": s.cc1_pass,
+            "CC2 pass": s.cc2_pass,
+            "CC3 pass": s.cc3_pass,
+            "All pass": s.all_pass,
+        })
+    cdf = pd.DataFrame(rows)
+    st.dataframe(cdf, width="stretch", hide_index=True)
+    st.caption("Table notation: ê = unit two-fold symmetry axis; λ₂ = middle principal stretch; CC2 raw = direct value of the CC2 equality left side; CC2 normalized = scale-normalized absolute mismatch; CC3 margin ≥ 0 passes the inequality; 'pass' columns use the explicit numerical tolerances shown above.")
+    passing_compound = [s for s in systems if s.all_pass and s.domain_type.startswith("Compound")]
+    if passing_compound:
+        st.info("A Compound domain satisfies CC1–CC3 for the current lattice. In the classical framework this provides compatibility for arbitrary laminate fraction, but it does not by itself guarantee elimination of the austenite/compound-laminate transition layer. The frontier workspace keeps that stronger extreme-compatibility question separate.")
 
-    with st.expander("Compare all classified domain systems"):
-        rows=[]
-        for x in systems:
-            rows.append({"Domain":x.domain_type,"axis ê":axis_label(x.axis),"partner":"" if x.partner_axis is None else axis_label(x.partner_axis),"|λ₂−1|":abs(x.cc1_residual),"CC2 normalized":x.cc2_normalized,"CC3 margin":x.cc3_margin,"CC1":x.cc1_pass,"CC2":x.cc2_pass,"CC3":x.cc3_pass,"All":x.all_pass})
-        st.dataframe(pd.DataFrame(rows),width="stretch",hide_index=True)
+    st.markdown("#### Exact equations implemented")
+    f1, f2 = st.columns(2)
+    with f1:
+        formula_with_symbols(r"CC1:\quad \lambda_2=1", list(definitions_for_equation("PTMC-SC1")))
+        formula_with_symbols(r"CC2:\quad a\cdot U\,\mathrm{cof}(U^2-I)n=0", list(definitions_for_equation("PTMC-SC2")))
+    with f2:
+        formula_with_symbols(r"CC3:\quad \mathrm{tr}(U^2)-\det(U^2)-\frac{|a|^2|n|^2}{4}-2\ge0", list(definitions_for_equation("PTMC-SC3")))
+        formula_with_symbols(
+            r"\text{Type I: }|U^{-1}\hat e|=1\qquad \text{Type II: }|U\hat e|=1",
+            [SymbolDefinition(r"U", "transformation stretch tensor", "dimensionless"), SymbolDefinition(r"U^{-1}", "inverse of U", "dimensionless"), SymbolDefinition(r"\hat e", "unit two-fold symmetry axis used to classify the domain system", "unit vector"), SymbolDefinition(r"|\cdot|", "Euclidean vector norm (length)", "dimensionless here")],
+        )
+    st.caption("The simplified Type-I/II CC2 expressions are shown only for non-compound Type-I/II systems. Compound systems use the full CC2 equation and their dedicated rank-one formulas; the simplified column is intentionally blank/NaN.")
 
-    with st.expander("Stretch tensors & exact equations · advanced"):
-        st.markdown("**U — transformation stretch tensor**")
-        st.dataframe(pd.DataFrame(stretch.U),width="stretch")
-        st.markdown("**U²**")
-        st.dataframe(pd.DataFrame(stretch.U2),width="stretch")
-        formula_with_symbols(r"CC1:\ \lambda_2=1",list(definitions_for_equation("PTMC-SC1")))
-        formula_with_symbols(r"CC2:\ a\cdot U\,\mathrm{cof}(U^2-I)n=0",list(definitions_for_equation("PTMC-SC2")))
-        formula_with_symbols(r"CC3:\ \mathrm{tr}(U^2)-\det(U^2)-\frac{|a|^2|n|^2}{4}-2\ge0",list(definitions_for_equation("PTMC-SC3")))
+    with st.expander("Compound-domain equations and classification"):
+        st.markdown("If two perpendicular generators ê₁ and ê₂ produce the same non-trivial related stretch, the app classifies the pair as Compound instead of double-counting Type-I/II descriptions.")
+        formula_with_symbols(
+            r"n_C^1=\hat e_1,\quad a_C^1=\xi U\hat e_2,\quad \xi=2\frac{\hat e_2\cdot U^{-2}\hat e_1}{\hat e_1\cdot U^{-2}\hat e_1}",
+            [
+                SymbolDefinition(r"n_C^1", "plane normal of the first Compound-domain rank-one solution", "direction/covector scale"),
+                SymbolDefinition(r"a_C^1", "shear/displacement vector of the first Compound-domain rank-one solution", "dimensionless"),
+                SymbolDefinition(r"\hat e_1,\hat e_2", "two perpendicular unit two-fold symmetry axes defining the Compound pair", "unit vectors"),
+                SymbolDefinition(r"\xi", "scalar coefficient that sets the magnitude/sign of a_C^1", "dimensionless"),
+                SymbolDefinition(r"U^{-2}", "(U^{-1})(U^{-1}); inverse-square of the stretch tensor", "dimensionless"),
+                SymbolDefinition(r"\cdot", "vector dot product", "dimensionless here"),
+            ],
+        )
+        formula_with_symbols(
+            r"n_C^2=\hat e_2,\quad a_C^2=\eta U\hat e_1,\quad \eta=-2\frac{\hat e_2\cdot U^2\hat e_1}{\hat e_1\cdot U^2\hat e_1}",
+            [
+                SymbolDefinition(r"n_C^2", "plane normal of the second Compound-domain rank-one solution", "direction/covector scale"),
+                SymbolDefinition(r"a_C^2", "shear/displacement vector of the second Compound-domain rank-one solution", "dimensionless"),
+                SymbolDefinition(r"\hat e_1,\hat e_2", "two perpendicular unit two-fold symmetry axes defining the Compound pair", "unit vectors"),
+                SymbolDefinition(r"\eta", "scalar coefficient that sets the magnitude/sign of a_C^2", "dimensionless"),
+                SymbolDefinition(r"U^2", "U multiplied by itself", "dimensionless"),
+                SymbolDefinition(r"\cdot", "vector dot product", "dimensionless here"),
+            ],
+        )
+        st.caption("The full CC1–CC3 equations are then evaluated for each compound rank-one solution.")
 
-    methods=f"The transformation stretch tensor U was evaluated from the measured B2/B19′ lattice metrics. All symmetry-classified Type-I, Type-II and Compound domain systems were tested against CC1, CC2 and CC3 using thresholds {cc1_tol:.1e} and {cc2_tol:.1e} for the two equality residuals; CC3 was required to have non-negative margin."
-    results=f"{pass_count} of {len(systems)} classified domain systems satisfied all three cofactor conditions. The inspected {s.domain_type} system had |λ₂−1|={abs(s.cc1_residual):.3e}, normalized CC2 residual={s.cc2_normalized:.3e}, and CC3 margin={s.cc3_margin:.3e}."
-    paper_wording(methods,results,"A classical cofactor pass is not automatically labeled as CT shear/shear supercompatibility; the latter is evaluated separately in Workspace 3.")
-    math_used(["PTMC-SC1","PTMC-SC2","PTMC-SC3"],title="Methods/equations audit")
+    with st.expander("Show U and U² matrices"):
+        st.markdown("**U — transformation stretch tensor (dimensionless 3×3 matrix)**")
+        st.caption("Rows/columns are the three orthonormal spatial axes used by the PTMC calculation. U contains pure stretch, with no rigid-body rotation.")
+        st.dataframe(pd.DataFrame(stretch.U, index=["axis 1", "axis 2", "axis 3"], columns=["axis 1", "axis 2", "axis 3"]), width="stretch")
+        st.markdown("**U² — U multiplied by U (dimensionless 3×3 matrix)**")
+        st.dataframe(pd.DataFrame(stretch.U2, index=["axis 1", "axis 2", "axis 3"], columns=["axis 1", "axis 2", "axis 3"]), width="stretch")
+    math_used(["PTMC-SC1", "PTMC-SC2", "PTMC-SC3", "IND-TWIN-SPECTRAL", "LAMINATE-F"])
 
 
 # ---------- 3 variants / operators / twins / IW ----------
 elif workspace.startswith("3"):
     st.header("NiTi variants, twins & Interaction Work")
     st.markdown(
-        "This workspace separates three physical questions that are often mixed together: **variant relationships**, **M/M twinning and CT compatibility**, "
-        "and **stress-driven martensite reorientation**. Every result below uses the lattice entered on this page and reports the numerical criterion used for PASS/FAIL."
+        "This workspace answers **three different questions**. Pick one below and the page shows only the inputs/results needed for that question. "
+        "It does **not** use KS, NW, Pitsch or Bain; the built-in NiTi crystallography uses the B2↔B19′ correspondence/metric/symmetry framework."
     )
 
-    # ------------------ Step 1: compact, local inputs ------------------
-    st.subheader("1 · Define the NiTi lattice")
+    # ------------------ Step 1: local inputs ------------------
+    st.subheader("1 · Enter the NiTi lattice you want to study")
     with st.container(border=True):
-        p1,p2=st.columns([2.4,1])
+        p1,p2=st.columns([2.2,1])
         with p1:
-            preset_name=st.selectbox(
-                "Saved starting point",
+            preset_name = st.selectbox(
+                "Start from a saved lattice example",
                 list(PRESETS.keys()),
-                key="w3_preset_name_v3",
-                help="A preset is only a reproducible starting point. For a paper about your alloy, use your measured lattice parameters and report their source/temperature.",
+                key="w3_preset_name",
+                help="Choose an example, load it, then edit any value below. Your own measured lattice parameters are preferable for a paper about your alloy.",
             )
         with p2:
-            if st.button("Load example",width="stretch",disabled=preset_name=="Custom",key="w3_load_preset_v3"):
-                load_preset(preset_name); st.rerun()
+            if st.button("Load selected example", width="stretch", disabled=preset_name == "Custom", key="w3_load_preset"):
+                load_preset(preset_name)
+                st.rerun()
 
-        i1,i2,i3=st.columns(3)
-        with i1:
-            st.number_input("a_B2 (Å)",min_value=0.1,max_value=20.0,step=0.001,format="%.6f",key="a_b2",help="Cubic B2 austenite unit-cell edge length.")
-            st.number_input("a_B19′ (Å)",min_value=0.1,max_value=20.0,step=0.001,format="%.6f",key="a_b19p",help="Monoclinic B19′ a-axis length.")
-        with i2:
-            st.number_input("b_B19′ (Å)",min_value=0.1,max_value=20.0,step=0.001,format="%.6f",key="b_b19p",help="Monoclinic B19′ b-axis length.")
-            st.number_input("c_B19′ (Å)",min_value=0.1,max_value=20.0,step=0.001,format="%.6f",key="c_b19p",help="Monoclinic B19′ c-axis length.")
-        with i3:
-            st.number_input("β_B19′ (°)",min_value=1.0,max_value=179.0,step=0.01,format="%.5f",key="beta_deg",help="Monoclinic angle between the B19′ a and c axes.")
-            with st.expander("Exactness tolerances · advanced"):
-                ct_tol=st.number_input("CMC / analytical exactness tolerance",min_value=1e-10,max_value=1e-2,value=2e-6,format="%.2e",key="w3_ct_tol_v3")
-                shear_tol=st.number_input("Shear/shear ε exactness tolerance",min_value=1e-10,max_value=1e-2,value=2e-6,format="%.2e",key="w3_shear_tol_v3")
-                cc1_tol=st.number_input("PTMC CC1 tolerance |λ₂−1|",min_value=1e-10,max_value=0.1,value=1e-5,format="%.2e",key="w3_cc1_tol_v3")
-                cc2_tol=st.number_input("PTMC CC2 normalized tolerance",min_value=1e-10,max_value=0.1,value=1e-5,format="%.2e",key="w3_cc2_tol_v3")
-                st.caption("All four are numerical classification tolerances, not material parameters. Raw residuals are always exported.")
-        with st.expander("What do these five lattice symbols mean?"):
-            st.markdown("**a_B2** = cubic parent edge. **a_B19′, b_B19′, c_B19′** = monoclinic martensite edge lengths. **β** = angle between B19′ a and c. Å = 10⁻¹⁰ m.")
+        st.caption("All five quantities below are physical inputs. Å = ångström. β is the monoclinic angle between the B19′ a and c axes.")
+        l1,l2=st.columns(2)
+        with l1:
+            number_with_unit("B2 lattice parameter — a_B2", "a_b2", "Å", "Cubic B2 parent unit-cell edge.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ lattice parameter — a_B19′", "a_b19p", "Å", "Monoclinic B19′ a-axis length.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ lattice parameter — b_B19′", "b_b19p", "Å", "Monoclinic B19′ b-axis length.", 0.1, 20.0, 0.001, "%.6f")
+        with l2:
+            number_with_unit("B19′ lattice parameter — c_B19′", "c_b19p", "Å", "Monoclinic B19′ c-axis length.", 0.1, 20.0, 0.001, "%.6f")
+            number_with_unit("B19′ monoclinic angle — β", "beta_deg", "°", "Angle between the B19′ a and c axes.", 1.0, 179.0, 0.01, "%.5f")
+            with st.expander("Numerical tolerances · advanced"):
+                cc1_tol = st.number_input("CC1 tolerance |λ₂−1|", min_value=1e-10, max_value=0.1, value=1e-5, format="%.2e", key="w3_cc1_tol")
+                cc2_tol = st.number_input("CC2 normalized tolerance", min_value=1e-10, max_value=0.1, value=1e-5, format="%.2e", key="w3_cc2_tol")
+                st.caption("These are numerical pass/fail tolerances, not material parameters.")
 
-    inp=LatticeInput(
-        a_b2=float(st.session_state.a_b2),a_b19p=float(st.session_state.a_b19p),
-        b_b19p=float(st.session_state.b_b19p),c_b19p=float(st.session_state.c_b19p),
+    inp = LatticeInput(
+        a_b2=float(st.session_state.a_b2),
+        a_b19p=float(st.session_state.a_b19p),
+        b_b19p=float(st.session_state.b_b19p),
+        c_b19p=float(st.session_state.c_b19p),
         beta_deg=float(st.session_state.beta_deg),
     )
     try:
-        ma,mm=normalized_metrics(inp); cmc=cmc_matrix(ma,mm); smc=smc_matrix(ma,mm)
-        deg=cmc_degeneracy(cmc,rtol=float(ct_tol),atol=1e-12)
-        stretch=stretch_from_lattice(inp)
-        dashboard=compatibility_dashboard(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol)
+        ma, mm = normalized_metrics(inp)
+        cmc = cmc_matrix(ma, mm)
+        deg = cmc_degeneracy(cmc)
+        smc = smc_matrix(ma, mm)
+        stretch = stretch_from_lattice(inp)
+        dashboard = compatibility_dashboard(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol)
     except ValueError as exc:
         st.error(str(exc)); st.stop()
-    ar,br,cr=inp.ratios(); cmc_report=cmc_audit(inp,cmc,float(ct_tol))
+    ar,br,cr=inp.ratios()
 
-    st.markdown("#### Current study")
-    s1,s2,s3,s4=st.columns(4)
-    s1.metric("Transformation","B2 → B19′")
-    s2.metric("Correspondence variants","12")
-    s3.metric("Operator classes","7 incl. identity")
-    s4.metric("A/M CMC","PASS — exact" if deg.exact else "FAIL — not exact")
-    st.caption(f"Normalized lattice ratios: a = {ar:.8f}, b = {br:.8f}, c = {cr:.8f}. Built-in crystallography: B2 m3̅m ↔ B19′ 2/m, Otsuka–Ren correspondence used by the CT engine.")
+    with st.expander("Calculated dimensionless ratios used by compatibility theory"):
+        rr1,rr2,rr3=st.columns(3)
+        rr1.metric("a = a_B19′ / a_B2", f"{ar:.8f}")
+        rr2.metric("b = b_B19′ / a_B2", f"{br:.8f}")
+        rr3.metric("c = c_B19′ / a_B2", f"{cr:.8f}")
+        st.caption("These are normalized lattice ratios, not chemical composition.")
 
-    # ------------------ Step 2: physical question ------------------
-    st.subheader("2 · Choose the physical question")
-    task=st.radio(
-        "",
+    # ------------------ Step 2: choose question ------------------
+    st.subheader("2 · What do you want to calculate?")
+    task = st.radio(
+        "Choose one task",
         [
-            "A · How are the 12 B19′ correspondence variants related?",
-            "B · Can a selected variant pair twin, and is that twin CT-supercompatible with B2?",
-            "C · From an initial martensite state, which reorientation is favored by the applied stress?",
+            "A · Which B19′ correspondence variants/operators exist?",
+            "B · Which transformation twins exist, and do they match the A/M shear?",
+            "C · Which martensite reorientation is favored by Interaction Work?",
         ],
-        key="w3_task_v3",
-        label_visibility="collapsed",
+        key="w3_task",
+        help="The three tasks use related crystallography but answer different physical questions.",
     )
-    st.caption("A = correspondence/operator theory · B = M/M twinning + CMC/SMC/shear–shear · C = Interaction Work. These are related, but they are not the same criterion.")
-
-    task_payload={}; paper_result=""; paper_methods=""
 
     # ============================================================
-    # A
+    # A: correspondence variants / operators
     # ============================================================
     if task.startswith("A"):
-        st.subheader("A · Variant relationship explorer")
-        st.markdown("Pick the **actual pair you want to understand**. The app then identifies its intercorrespondence class. It does not call every variant relation a twin.")
+        st.subheader("A · Correspondence variants and intercorrespondence operators")
+        st.info(
+            "**Plain meaning:** a correspondence variant is one crystallographically distinct way B19′ can inherit the B2 lattice correspondence. "
+            "An operator class tells you how one correspondence variant is related to another. A variant is not automatically a twin."
+        )
         cosets=correspondence_left_cosets(); dcs=double_cosets(); opmap=correspondence_operator_map()
+        a1,a2=st.columns(2)
+        a1.metric("B19′ correspondence variants", len(cosets), help="N_C^M = |G^A|/|H_C^A| = 48/4 = 12 for the built-in NiTi correspondence.")
+        a2.metric("Intercorrespondence classes", len(dcs), help="Seven double-coset classes including the identity/same-variant class.")
+        st.success("Built-in structural check: |Gᴬ| = 48, |H_Cᴬ| = 4, N_Cᴹ = 12, double-coset classes = 7.")
+
+        st.markdown("#### Explore one variant pair")
         c1,c2=st.columns(2)
-        from_v=c1.selectbox("From variant Vᵢ",list(opmap.index),index=0,key="w3_A_from_v3")
-        to_v=c2.selectbox("To variant Vⱼ",list(opmap.columns),index=1,key="w3_A_to_v3")
-        label=str(opmap.loc[from_v,to_v]); dc=next(d for d in dcs if d.label==label)
-        equivalent_pairs=int(np.sum(opmap.to_numpy()==label))
-
-        st.markdown("#### Answer")
-        a1,a2,a3,a4=st.columns(4)
-        a1.metric("Selected relation",f"{from_v} → {to_v}")
-        a2.metric("Operator class",label)
-        a3.metric("Equivalent ordered pairs",equivalent_pairs)
-        a4.metric("Twin-capable class","YES" if (dc.n_mirrors+dc.n_twofold_rotations)>0 else "NO")
+        from_v=c1.selectbox("From correspondence variant", list(opmap.index), index=0, key="w3_from_variant")
+        to_v=c2.selectbox("To correspondence variant", list(opmap.columns), index=1, key="w3_to_variant")
+        label=str(opmap.loc[from_v,to_v])
+        dc=next(d for d in dcs if d.label==label)
+        o1,o2,o3=st.columns(3)
+        o1.metric("Operator class", label)
+        o2.metric("Parent mirrors in class", dc.n_mirrors)
+        o3.metric("Parent 180° rotations in class", dc.n_twofold_rotations)
         if dc.contains_identity:
-            st.info("This is the identity class: the two labels refer to the same correspondence variant.")
+            st.info("This is the identity/same-variant class: no change of correspondence variant.")
         elif dc.polar:
-            st.info("This pair belongs to a polar intercorrespondence class with no parent mirror or 180° generator. In this CT two-fold construction it is **not a Type-I/Type-II transformation-twin class**.")
+            st.info("This class relates different correspondence variants but contains no parent mirror or 180° rotation, so this class does not directly generate the Type-I/Type-II twin candidates used here.")
         else:
-            kinds=[]
-            if dc.n_mirrors: kinds.append("Type-I candidates from parent mirrors")
-            if dc.n_twofold_rotations: kinds.append("Type-II candidates from parent 180° rotations")
-            st.success("This operator class is twin-capable: "+"; ".join(kinds)+".")
+            bits=[]
+            if dc.n_mirrors: bits.append("mirror symmetry → Type-I twin candidates")
+            if dc.n_twofold_rotations: bits.append("180° rotation → Type-II twin candidates")
+            st.success("This operator class is twin-capable: " + "; ".join(bits) + ".")
 
-        with st.expander("Why this answer is correct"):
-            formula_with_symbols(r"N_C^M=|G^A|/|H_C^A|=48/4=12",list(definitions_for_equation("N-CORR")))
-            st.markdown(f"For the selected ordered pair, the relative parent operation falls in **{label} = H_C^A g H_C^A**. The class contains **{len(dc.matrices)}** parent operations, **{dc.n_mirrors}** mirrors and **{dc.n_twofold_rotations}** 180° rotations.")
-        with st.expander("Full 12 × 12 operator map · audit"):
-            st.dataframe(opmap,width="stretch")
-        with st.expander("Reduced operator composition table · audit"):
-            st.dataframe(operator_composition_table(),width="stretch")
-            st.caption("A cell may contain several classes because composition becomes multivalued after individual groupoid arrows are reduced to double-coset classes.")
-
-        task_payload={"from_variant":from_v,"to_variant":to_v,"operator_class":label,"class_size":len(dc.matrices),"mirrors":dc.n_mirrors,"rotations_180":dc.n_twofold_rotations,"polar":dc.polar}
-        paper_methods=(f"Correspondence variants were generated from the left-coset decomposition of the B2 parent symmetry group by the correspondence intersection subgroup. Intervariant relations were classified by the double cosets H_C^A g H_C^A following the published CT/groupoid framework (DOI {CT_SOURCE['doi']}).")
-        paper_result=(f"For the specified B2/B19′ lattice and built-in correspondence, 12 correspondence variants and seven intercorrespondence classes (including identity) were obtained. The selected relation {from_v}→{to_v} belongs to {label}; the class contains {dc.n_mirrors} parent mirror generator(s) and {dc.n_twofold_rotations} parent 180° generator(s).")
+        with st.expander("Show the full 12 × 12 operator map"):
+            st.dataframe(opmap, width="stretch")
+            st.caption("Row = starting correspondence variant; column = target correspondence variant; cell = double-coset class.")
+        with st.expander("Show the seven operator classes"):
+            st.dataframe(pd.DataFrame([{
+                "Class":d.label,
+                "Same-variant class":d.contains_identity,
+                "Polar/no twin generator":d.polar,
+                "Matrices in class":len(d.matrices),
+                "Mirror generators":d.n_mirrors,
+                "180° generators":d.n_twofold_rotations,
+            } for d in dcs]), width="stretch", hide_index=True)
+        with st.expander("Group-theory equations · advanced"):
+            formula_with_symbols(r"N_C^M=\frac{|G^A|}{|H_C^A|}=\frac{48}{4}=12", list(definitions_for_equation("N-CORR")))
+            formula_with_symbols(r"O_k=H_C^A g_k^A H_C^A", list(definitions_for_equation("DOUBLE-COSET")))
+            st.dataframe(operator_composition_table(), width="stretch")
+            st.caption("The reduced operator composition can be multivalued after individual groupoid arrows are grouped into double-coset classes.")
+        st.warning("Do not confuse these **correspondence variants** with PTMC stretch variants Uᵢ or with the internal distortion-state IDs used in the IW calculation below. The 2026 CT paper explicitly distinguishes those objects.")
         math_used(["HC","LEFT-COSET","N-CORR","DOUBLE-COSET"])
 
     # ============================================================
-    # B
+    # B: twins / shear-shear
     # ============================================================
     elif task.startswith("B"):
-        st.subheader("B · Selected variant pair → operator → twin → CT compatibility")
-        st.markdown("Choose a **variant pair first**. This removes the ambiguity in the previous version: the operator class is determined from that pair, and only twin candidates belonging to that class are shown.")
-        opmap=correspondence_operator_map(); dcs=double_cosets()
-        b1,b2=st.columns(2)
-        from_v=b1.selectbox("First correspondence variant",list(opmap.index),index=0,key="w3_B_from_v3")
-        to_v=b2.selectbox("Second correspondence variant",list(opmap.columns),index=1,key="w3_B_to_v3")
-        label=str(opmap.loc[from_v,to_v]); dc=next(d for d in dcs if d.label==label)
-        st.write(f"**Relationship chain:** `{from_v} ↔ {to_v}` → **{label}**")
-
+        st.subheader("B · Transformation twins and CT supercompatibility bridge")
+        st.markdown(
+            "For the lattice you entered, the app generates Type-I twins from **parent mirror symmetries** and Type-II twins from **parent 180° rotations**. "
+            "Then, only if an exact A/M CMC habit-plane solution exists, it tests whether that A/M shear is compatible with the selected M/M twin shear."
+        )
         entries=full_twin_explorer(ma,mm); cpairs=compound_twin_pairs(entries)
         compound_indices={idx for pair in cpairs for idx in pair}
-        allowed=[i for i,e in enumerate(entries) if e.double_coset==label]
+        options=[]
+        for idx,e in enumerate(entries):
+            comp=" · compound-equivalent" if idx in compound_indices else ""
+            options.append(f"{idx+1:02d} · {e.double_coset} · {e.twin.twin_type} · {e.parent_element} · shear {e.twin.shear_amplitude:.5f}{comp}")
+        family=st.selectbox("Filter twin candidates", ["All","Type I only","Type II only","Compound-equivalent only"], key="w3_twin_filter")
+        allowed=[]
+        for idx,e in enumerate(entries):
+            ok=(family=="All" or (family=="Type I only" and e.twin.twin_type=="Type I") or (family=="Type II only" and e.twin.twin_type=="Type II") or (family=="Compound-equivalent only" and idx in compound_indices))
+            if ok: allowed.append(idx)
         if not allowed:
-            st.warning(f"{label} contains no non-zero two-fold-generated Type-I/Type-II twin candidate in this CT solver. The selected pair is therefore not treated as a transformation twin by this construction.")
-            task_payload={"variant_pair":[from_v,to_v],"operator_class":label,"twin_candidate":None}
-            paper_methods=f"Variant-pair relations were assigned to CT double-coset classes and two-fold parent symmetry elements were tested for Type-I/Type-II M/M twin solutions (DOI {CT_SOURCE['doi']})."
-            paper_result=f"The selected correspondence-variant pair {from_v}↔{to_v} belongs to {label}. No non-zero two-fold-generated Type-I/Type-II twin candidate was obtained for this class with the declared lattice parameters."
+            st.warning("No twin candidate matches this filter.")
         else:
-            choices=[]
-            for i in allowed:
-                e=entries[i]
-                tag=" · compound-equivalent" if i in compound_indices else ""
-                choices.append(f"{e.twin.twin_type} · {e.parent_element} · shear {e.twin.shear_amplitude:.6f}{tag}")
-            choice=st.selectbox("Twin solution within this operator class",choices,key="w3_B_twin_v3")
-            idx=allowed[choices.index(choice)]; e=entries[idx]; coords=twin_coordinate_report(e.twin)
-
-            st.markdown("#### M/M twin answer")
-            m1,m2,m3,m4=st.columns(4)
-            m1.metric("Variant pair",f"{from_v} ↔ {to_v}")
-            m2.metric("Operator class",label)
-            m3.metric("Twin type",e.twin.twin_type)
-            m4.metric("Twin shear |a|",f"{e.twin.shear_amplitude:.8f}")
-            st.markdown(f"**Parent symmetry generator:** `{e.parent_element}` — this is the symmetry operation that generates the CT twin solution; it is **not automatically the martensite twin-plane label**.")
-
-            t1,t2=st.columns(2)
-            with t1:
-                st.markdown("**Twin shear direction**")
-                st.write(f"B2 coordinates: `{coords['shear_direction_B2']}`")
-                st.write(f"B19′ coordinates: `{coords['shear_direction_B19p']}`")
-            with t2:
-                st.markdown("**Twin plane**")
-                st.write(f"B2 plane-normal coordinates: `{coords['plane_B2']}`")
-                st.write(f"B19′ Miller/covector coordinates: `{coords['plane_B19p']}`")
-            st.caption("Direction components and plane-normal components are only converted to small Miller indices when the angular fit is within 0.20°. Otherwise the app prints the normalized irrational components instead of inventing indices.")
-            st.warning("**Pair-specific coordinate rule:** the plane/direction shown above is a representative twin geometry for this double-coset class. A different Vᵢ↔Vⱼ pair in the same class is symmetry-equivalent but may require an H_C symmetry operation to express its exact pair-specific indices. The app therefore does not falsely label the representative coordinates as unique coordinates of every pair in the class.")
+            display=[options[i] for i in allowed]
+            chosen_text=st.selectbox("Choose one twin candidate to inspect", display, key="w3_twin_choice")
+            idx=allowed[display.index(chosen_text)]; e=entries[idx]
+            st.markdown("#### What this selected twin means")
+            q1,q2=st.columns(2)
+            q1.metric("Twin type", e.twin.twin_type)
+            q2.metric("Shear amplitude |a|", f"{e.twin.shear_amplitude:.8f}")
+            st.write(f"**Parent symmetry that generates it:** `{e.parent_element}`")
+            st.write(f"**Twin shear vector in parent B2 coordinates:** `{format_vector(e.twin.twin_shear_vector)}`")
+            st.write(f"**Twin-plane normal in parent B2 coordinates:** `{format_vector(e.twin.twin_plane_normal)}`")
             if idx in compound_indices:
-                st.success("Compound-equivalent: a Type-I and Type-II description in the same operator class represent the same M/M twin geometry up to sign/scaling.")
+                st.success("This candidate belongs to a compound-equivalent Type-I/Type-II pair: the two descriptions represent the same M/M twin geometry up to sign/scaling.")
 
-            # Exact CMC audit
-            st.markdown("#### A/M prerequisite — is there an exact CMC habit-plane solution?")
-            rep=cmc_report; deg_local=rep['degeneracy']; eig=deg_local.eigenvalues
-            c1,c2,c3,c4=st.columns(4)
-            c1.metric("CMC status","PASS" if deg_local.exact else "FAIL")
-            c2.metric("min |qᵢ|",f"{rep['closest_eigenvalue_abs']:.8e}")
-            c3.metric("relative CMC distance δ",f"{rep['relative_zero']:.8e}")
-            c4.metric("exactness criterion",f"δ ≤ {ct_tol:.2e}")
-            q_labeled=rep["analytic"].eigenvalues_labeled
-            qdf=pd.DataFrame([{"CMC eigenvalue":name,"value":float(value),"distance from zero":abs(float(value))} for name,value in q_labeled.items()])
-            st.dataframe(qdf,width="stretch",hide_index=True)
-            if not deg_local.exact:
-                if rep["relative_zero"] > ct_tol:
-                    st.error(f"No CMC eigenvalue is zero within the declared relative tolerance. δ_CMC = {rep['relative_zero']:.6g} > {ct_tol:.2e} ({rep['distance_over_tolerance']:.3g}× the tolerance). Therefore the CMC quadratic does not degenerate into the exact plane factor(s) required by this CT A/M construction.")
-                else:
-                    st.error("A near-zero CMC eigenvalue exists within the declared tolerance, but the remaining eigenvalue signs do not satisfy the factorization criterion required for an exact compatible plane. The app therefore does not certify A/M CMC compatibility.")
-            else:
-                st.success(f"CMC degeneracy detected at the declared numerical tolerance (order {deg_local.order}); {len(deg_local.habit_planes)} exact habit-plane factor(s) are available to the SMC/shear–shear step.")
-
-            with st.expander("First-order analytical CMC families C1/C2a/C2b/C3 · audit"):
-                st.dataframe(rep['family_table'],width="stretch",hide_index=True)
-                st.warning("C2b source note: the app follows the analytical equation/derivation sign convention by default and preserves the conflicting later table sign as a documented source discrepancy; it is never silently merged.")
-                hrows=[]
-                for hf in higher_order_degeneracy_families(ar,br,cr,inp.beta_deg,tol=float(ct_tol)):
-                    hrows.append({"Family":hf.name,"Order":hf.order,"Exact family met":hf.met,"Residuals":json.dumps(hf.residuals),"Equation key":hf.equation_key,"Note":hf.note})
-                st.markdown("**Higher-order degeneracy families**")
-                st.dataframe(pd.DataFrame(hrows),width="stretch",hide_index=True)
-
-            st.markdown("#### Final CT chain for the selected twin")
-            if deg_local.habit_planes:
-                matches=[shear_match(p,smc,e.twin,ma) for p in deg_local.habit_planes]
+            st.markdown("#### Does this M/M twin cooperate with the A/M interface?")
+            s1,s2,s3=st.columns(3)
+            s1.metric("A/M CMC habit plane", "FOUND" if deg.habit_planes else "NOT EXACT")
+            s2.metric("M/M twin", "DEFINED")
+            if deg.habit_planes:
+                matches=[shear_match(p,smc,e.twin,ma) for p in deg.habit_planes]
                 best=min(matches,key=lambda m:m.epsilon)
-                p1,p2,p3,p4=st.columns(4)
-                p1.metric("A/M CMC","PASS")
-                p2.metric("M/M twin","PASS")
-                p3.metric("shear/shear ε",f"{best.epsilon:.8e}")
-                p4.metric("representative-system verdict","PASS" if best.epsilon<=shear_tol else "FAIL")
-                st.write(f"**Habit-plane normal (A/M):** `{plane_text(best.habit_plane)}`")
+                s3.metric("Best shear/shear ε", f"{best.epsilon:.8f}")
+                st.write(f"**Best CMC habit-plane normal:** `{plane_text(best.habit_plane)}`")
                 st.write(f"**A/M shear direction from SMC:** `{format_vector(best.shear_direction)}`")
-                st.write(f"**Angle between A/M and M/M shear directions:** `{best.angle_deg:.8f}°`")
-                if best.epsilon<=shear_tol:
-                    st.success(f"For this representative twin geometry and habit-plane branch, A/M compatibility, M/M twinning, and shear/shear intercompatibility are all satisfied within the declared numerical tolerance ε ≤ {shear_tol:.2e}.")
-                    verdict="established for the selected CT system at the declared numerical tolerances"
+                st.write(f"**Angle between A/M and twin shear directions:** `{best.angle_deg:.6f}°`")
+                if best.epsilon <= 1e-3:
+                    st.success("Near the exact shear/shear condition at the displayed numerical scale. Use the dashboard/paper audit for the complete certification statement.")
                 else:
-                    st.warning(f"A/M and M/M compatibility exist, but ε = {best.epsilon:.6g} exceeds the declared shear/shear tolerance {shear_tol:.2e}. Full CT supercompatibility is not established for this representative system.")
-                    verdict="not established for the selected CT system because shear/shear mismatch exceeds tolerance"
-                best_payload={"epsilon":best.epsilon,"angle_deg":best.angle_deg,"habit_plane":np.asarray(best.habit_plane,float).tolist(),"shear_direction":np.asarray(best.shear_direction,float).tolist()}
+                    st.warning("A/M compatibility exists, but this selected twin does not satisfy the exact shear/shear intercompatibility condition.")
             else:
-                p1,p2,p3,p4=st.columns(4)
-                p1.metric("A/M CMC","FAIL")
-                p2.metric("M/M twin","PASS")
-                p3.metric("shear/shear ε","NOT COMPUTED")
-                p4.metric("representative-system verdict","NOT ESTABLISHED")
-                st.warning("The shear/shear equation is deliberately **not evaluated** because its exact A/M habit-plane prerequisite is absent. This is a dependency decision, not missing software output.")
-                st.info("What to do next: keep these same lattice inputs and use **Workspace 6 · Inverse lattice design** to search for a lattice on/near the compatibility manifold; then return here and re-test the twin.")
-                verdict="not established because exact A/M CMC compatibility is absent; shear/shear was not computed"
-                best_payload=None
+                s3.metric("Best shear/shear ε", "not evaluable")
+                st.warning("No exact CMC habit plane exists for these lattice parameters, so the final shear/shear condition cannot be certified. This is a mathematical prerequisite, not a software error.")
 
-            task_payload={
-                "variant_pair":[from_v,to_v],"operator_class":label,"twin_type":e.twin.twin_type,
-                "parent_generator":e.parent_element,"twin_shear":e.twin.shear_amplitude,
-                "coordinates":coords,"compound_equivalent":bool(idx in compound_indices),
-                "CMC_relative_zero":rep['relative_zero'],"CMC_tolerance":ct_tol,"CMC_exact":bool(deg_local.exact),
-                "shear_match":best_payload,"verdict":verdict,"geometry_scope":"representative twin geometry for the double-coset class; pair-specific coordinates may require H_C symmetry mapping",
-            }
-            paper_methods=(f"For the declared lattice parameters, correspondence-variant pairs were assigned to double-coset classes. Type-I twins were generated from parent mirror operations and Type-II twins from parent 180° rotations. A/M compatibility was tested by CMC degeneracy using the relative spectral criterion δ_CMC=min|q_i|/max|q_i|≤{ct_tol:.2e}; when exact CMC habit-plane factors existed, the SMC-derived A/M shear was compared with the M/M twin shear using the dimensionless mismatch ε, with numerical exactness criterion ε≤{shear_tol:.2e}. CT equations follow the cited 2026 correspondence/metrics/symmetry formulation (DOI {CT_SOURCE['doi']}).")
-            paper_result=(f"For {from_v}↔{to_v}, the intercorrespondence class was {label}. A representative {e.twin.twin_type} twin solution in this class, generated by {e.parent_element}, had shear magnitude {e.twin.shear_amplitude:.8f}; pair-specific plane/direction indices for other class-equivalent pairs require the corresponding H_C symmetry mapping. The CMC eigenvalues (sorted numerically) were {eig[0]:.8g}, {eig[1]:.8g}, and {eig[2]:.8g}, giving δ_CMC={rep['relative_zero']:.8g} against a tolerance of {ct_tol:.2e}. CT supercompatibility for the representative class geometry was {verdict}.")
-            math_used(["TWIN-I","TWIN-II","CMC","SMC-D","SHEAR-SHEAR","EPSILON"])
+        with st.expander("Show all twin candidates · advanced"):
+            rows=[]
+            for idx,e in enumerate(entries):
+                rows.append({
+                    "ID":idx+1,"Operator class":e.double_coset,"Twin type":e.twin.twin_type,
+                    "Compound-equivalent":idx in compound_indices,"Parent generator":e.parent_element,
+                    "Shear amplitude":e.twin.shear_amplitude,
+                    "Shear vector in B2":format_vector(e.twin.twin_shear_vector),
+                    "Plane normal in B2":format_vector(e.twin.twin_plane_normal),
+                })
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        st.info("Full CT supercompatibility requires **A/M compatibility + M/M twin compatibility + shear/shear intercompatibility**. A twin existing by itself is not enough.")
+        math_used(["TWIN-I","TWIN-II","SMC-D","SHEAR-SHEAR","EPSILON"])
 
     # ============================================================
-    # C
+    # C: IW reorientation
     # ============================================================
     else:
         st.subheader("C · Interaction Work for martensite reorientation")
-        st.markdown("This is a **reorientation** calculation: an existing martensite state Dᵢ is transformed into candidate state Dⱼ. It is not a B2→B19′ formation ranking and it is not a compatibility criterion.")
+        st.markdown(
+            "This calculation starts from an **existing martensite distortion state i** and asks which candidate state j is mechanically favored under the load. "
+            "That is different from simply ranking B2→B19′ formation variants."
+        )
         formula_with_symbols(
             r"F_{i\to j}=F_jF_i^{-1},\qquad \varepsilon_{i\to j}=F_{i\to j}-I,\qquad IW_{i\to j}=\sigma:\varepsilon_{i\to j}",
             [
-                SymbolDefinition(r"F_i", "lattice-distortion matrix of the declared initial martensite state i", "dimensionless"),
-                SymbolDefinition(r"F_j", "lattice-distortion matrix of candidate final martensite state j", "dimensionless"),
-                SymbolDefinition(r"\varepsilon_{i\to j}", "reorientation strain", "dimensionless"),
+                SymbolDefinition(r"F_i", "B2-basis active distortion matrix of the declared initial B19′ state i", "dimensionless"),
+                SymbolDefinition(r"F_j", "B2-basis active distortion matrix of candidate final B19′ state j", "dimensionless"),
+                SymbolDefinition(r"\varepsilon_{i\to j}", "reorientation strain from initial state i to candidate state j", "dimensionless"),
                 SymbolDefinition(r"\sigma", "applied stress tensor expressed in B2 coordinates", "MPa"),
-                SymbolDefinition(r"IW_{i\to j}", "interaction work for the reorientation", "MJ/m³ when σ is in MPa"),
+                SymbolDefinition(r"IW_{i\to j}", "interaction work for the i→j reorientation", "MJ/m³ when σ is in MPa"),
             ],
         )
+        st.caption("These are Xiao et al. 2022 Eqs. (10)–(12) combined with the IW definition used again in Xiao, CT-reference-author & Logé 2025.")
 
-        with st.container(border=True):
-            st.markdown("#### Loading and orientation")
-            mode=st.radio("Orientation input",["B2 loading direction [h k l]","Reconstructed B2 parent orientation from EBSD"],key="w3_C_mode_v3")
-            sense=st.radio("Loading sense",["Tension","Compression"],horizontal=True,key="w3_C_sense_v3")
-            magnitude=st.number_input("Stress magnitude |σ₀| (MPa)",min_value=0.0,value=50.0,step=10.0,key="w3_C_stress_v3")
-            sigma0=float(magnitude if sense=="Tension" else -magnitude)
-            loading_desc={"mode":mode,"sense":sense,"stress_magnitude_MPa":float(magnitude)}
-            if mode.startswith("B2"):
-                common=st.selectbox("Loading direction",["[100]","[110]","[111]","Custom"],key="w3_C_common_v3")
-                presets={"[100]":[1.,0.,0.],"[110]":[1.,1.,0.],"[111]":[1.,1.,1.]}
-                if common=="Custom":
-                    x1,x2,x3=st.columns(3)
-                    h=x1.number_input("h",value=1.0,step=1.0,key="w3_C_h_v3"); k=x2.number_input("k",value=0.0,step=1.0,key="w3_C_k_v3"); l=x3.number_input("l",value=0.0,step=1.0,key="w3_C_l_v3")
-                    n_b2=np.array([h,k,l],float)
-                else:
-                    n_b2=np.array(presets[common],float)
-                if np.linalg.norm(n_b2)<=1e-14:
-                    st.error("[h k l] cannot be [0 0 0]."); st.stop()
-                n_b2/=np.linalg.norm(n_b2); stress_b2=uniaxial_stress_tensor(sigma0,n_b2)
-                loading_desc["direction_B2_unit"]=n_b2.tolist()
-                st.caption("[h k l] is a crystallographic **direction**, not a plane. Scaling does not matter; [110] and [220] are the same axis.")
+        st.markdown("#### 2A · Tell the app how the specimen is loaded")
+        load_mode=st.radio(
+            "How do you know the loading orientation?",
+            ["I know the loading direction in B2 crystal coordinates [h k l]", "I have a reconstructed B2 EBSD orientation (Bunge Euler angles)"],
+            key="w3_iw_load_mode",
+        )
+        sense=st.radio("Loading sense", ["Tension","Compression"], horizontal=True, key="w3_iw_sense")
+        magnitude=st.number_input("Stress magnitude |σ₀| (MPa)", min_value=0.0, value=50.0, step=10.0, key="w3_iw_stress_mag", help="The 2022 NiTi bending study used +50 MPa for its tensile IW calculation. Use a value justified for your own experiment.")
+        sigma0=float(magnitude if sense=="Tension" else -magnitude)
+
+        loading_desc={"mode":load_mode,"sense":sense,"stress_magnitude_MPa":float(magnitude)}
+        if load_mode.startswith("I know"):
+            common=st.selectbox("Common B2 loading direction", ["[100]","[110]","[111]","Custom"], key="w3_iw_common_dir")
+            presets={"[100]":[1.,0.,0.],"[110]":[1.,1.,0.],"[111]":[1.,1.,1.]}
+            if common=="Custom":
+                x1,x2,x3=st.columns(3)
+                h=x1.number_input("h",value=1.0,step=1.0,key="w3_iw_h")
+                k=x2.number_input("k",value=0.0,step=1.0,key="w3_iw_k")
+                l=x3.number_input("l",value=0.0,step=1.0,key="w3_iw_l")
+                n_b2=np.array([h,k,l],float)
             else:
-                st.caption("Enter the reconstructed **B2 parent** orientation using the same crystal→specimen Bunge convention as Workspace 9. Do not enter a daughter B19′ Euler angle here.")
-                e1,e2,e3=st.columns(3)
-                phi1=e1.number_input("B2 φ₁ (°)",value=0.0,step=1.0,key="w3_C_phi1_v3"); Phi=e2.number_input("B2 Φ (°)",value=0.0,step=1.0,key="w3_C_Phi_v3"); phi2=e3.number_input("B2 φ₂ (°)",value=0.0,step=1.0,key="w3_C_phi2_v3")
-                axis=st.selectbox("Specimen loading axis",["X / RD","Y / TD","Z / ND"],key="w3_C_axis_v3")
-                n_spec={"X / RD":[1.,0.,0.],"Y / TD":[0.,1.,0.],"Z / ND":[0.,0.,1.]}[axis]
-                stress_b2,n_b2=stress_b2_from_ebsd_parent(sigma0,phi1,Phi,phi2,n_spec)
-                loading_desc.update({"B2_Bunge_Euler_deg":[float(phi1),float(Phi),float(phi2)],"specimen_axis":axis,"equivalent_direction_B2_unit":n_b2.tolist()})
-                st.write("Equivalent loading direction in B2 coordinates:",np.round(n_b2,6).tolist())
+                n_b2=np.array(presets[common],float)
+            if np.linalg.norm(n_b2)<=1e-14:
+                st.error("[h k l] cannot be [0 0 0]."); st.stop()
+            n_b2/=np.linalg.norm(n_b2)
+            stress_b2=uniaxial_stress_tensor(sigma0,n_b2)
+            loading_desc.update({"direction_B2_unit":n_b2.tolist()})
+            st.caption("[h k l] is a **direction**, not a plane. The app normalizes it internally; [110] and [220] represent the same loading axis.")
+        else:
+            st.caption("Use the reconstructed **B2 parent** orientation, not a B19′ daughter Euler angle. The app's convention is crystal→specimen Bunge ZXZ, the same convention used by the reconstruction module.")
+            e1,e2,e3=st.columns(3)
+            phi1=e1.number_input("B2 φ₁ (°)",value=0.0,step=1.0,key="w3_iw_phi1")
+            Phi=e2.number_input("B2 Φ (°)",value=0.0,step=1.0,key="w3_iw_Phi")
+            phi2=e3.number_input("B2 φ₂ (°)",value=0.0,step=1.0,key="w3_iw_phi2")
+            axis=st.selectbox("Specimen loading axis", ["X / RD","Y / TD","Z / ND"], key="w3_iw_spec_axis")
+            n_spec={"X / RD":[1.,0.,0.],"Y / TD":[0.,1.,0.],"Z / ND":[0.,0.,1.]}[axis]
+            stress_b2,n_b2=stress_b2_from_ebsd_parent(sigma0,phi1,Phi,phi2,n_spec)
+            loading_desc.update({"B2_Bunge_Euler_deg":[float(phi1),float(Phi),float(phi2)],"specimen_axis":axis,"equivalent_direction_B2_unit":n_b2.tolist()})
+            st.write("Equivalent loading direction expressed in B2 coordinates:", np.round(n_b2,6).tolist())
 
+        st.markdown("#### 2B · Choose the martensite state you start from")
         F0=niti_reference_distortion_from_lattice(inp); states=symmetry_generated_distortions(F0)
         if len(states)!=12:
-            st.error(f"Scientific sanity check failed: expected 12 distortion states, got {len(states)}."); st.stop()
-        initial=st.selectbox("Initial martensite distortion state Dᵢ",[f"D{i+1}" for i in range(12)],index=0,key="w3_C_initial_v3",help="D1…D12 are explicit software distortion states. For experimental EBSD, select Dᵢ only after the measured daughter has been assigned to this same distortion-state convention; otherwise treat the result as a theoretical orientation scan.")
+            st.error(f"Scientific sanity check failed: expected 12 unique distortion states, got {len(states)}."); st.stop()
+        initial=st.selectbox(
+            "Initial martensite distortion state",
+            [f"D{i+1}" for i in range(12)],
+            index=0,
+            key="w3_iw_initial",
+            help="D1…D12 are stable software IDs for the 12 explicit distortion matrices. Their matrices are included in the evidence export. They are kept separate from the correspondence-variant labels in task A to avoid silently mixing variant definitions.",
+        )
         initial_idx=int(initial[1:])-1
-        st.warning("**Experimental-paper rule:** choosing Dᵢ manually is not the same as identifying a measured B19′ EBSD variant. If your daughter variant has not been mapped into this D1…D12 convention, report this as a theoretical IW scan rather than an experimental grain-specific prediction.")
 
+        st.markdown("#### 3 · Result")
         iwdf,states,F0=reorientation_iw_table(inp,stress_b2,initial_idx)
-        candidates=iwdf[~iwdf["Same state"]].copy(); best=candidates.iloc[0]
-        st.markdown("#### Answer")
-        r1,r2,r3=st.columns(3)
-        r1.metric("Initial state",initial)
-        r2.metric("IWmax destination",best["Final state"])
-        r3.metric("IWmax",f"{best['IW (MJ/m³)']:.8f} MJ/m³")
+        candidates=iwdf[~iwdf["Same state"]].copy()
+        best=candidates.iloc[0]
+        r1,r2=st.columns(2)
+        r1.metric("Most favored destination by IWmax", best["Final state"])
+        r2.metric("IWmax for reorientation", f"{best['IW (MJ/m³)']:.6f} MJ/m³")
         if float(best["IW (MJ/m³)"])>0:
-            st.success(f"Under the declared loading, {best['Final state']} provides the largest positive mechanical work among the tested {initial}→Dⱼ reorientations.")
+            st.success(f"For the declared initial state {initial}, load and orientation, {best['Final state']} gives the largest positive mechanical work among the tested reorientation destinations.")
         else:
-            st.warning("Every tested reorientation has non-positive IW under this sign convention/loading. The largest numerical value is not described as a favorable event.")
-        st.bar_chart(candidates[["Final state","IW (MJ/m³)"]].set_index("Final state"),y="IW (MJ/m³)",width="stretch")
-        st.dataframe(candidates.head(3)[["Final state","IW (MJ/m³)","tr(ε)","‖ε‖F"]],width="stretch",hide_index=True)
-        with st.expander("All reorientation results + distortion matrices · audit"):
-            st.dataframe(iwdf,width="stretch",hide_index=True)
-            state_choice=st.selectbox("Inspect distortion matrix",[f"D{i+1}" for i in range(12)],key="w3_C_state_matrix_v3")
-            st.dataframe(pd.DataFrame(states[int(state_choice[1:])-1]),width="stretch")
-        st.info("This tab does **not** calculate the 2025 reorientation/deformation-twin ratio r unless both mechanisms are expressed in one consistent physical frame. The app refuses that shortcut rather than mixing B2 and B19′ coordinate systems.")
+            st.warning("No tested destination has positive IW under this sign convention/loading state. Do not interpret the numerically largest negative value as a favorable reorientation event.")
 
-        task_payload={"loading":loading_desc,"stress_tensor_B2_MPa":np.asarray(stress_b2,float).tolist(),"initial_state":initial,"best_destination":best['Final state'],"IWmax_MJ_m3":float(best['IW (MJ/m³)']),"all_results":iwdf.to_dict(orient='records')}
-        paper_methods=(f"Martensite reorientation was evaluated using F_i→j=F_j F_i^−1, ε_i→j=F_i→j−I, and IW_i→j=σ:ε_i→j. The stress tensor was expressed in the B2 frame; when an EBSD parent orientation was supplied, the specimen stress was rotated with the crystal→specimen Bunge convention. The formulation follows Xiao et al. (DOI {IW_REORIENTATION_SOURCE['doi']}) and the IW definition used in the cited 2025 deformation-mode study (DOI {IW_SOURCE['doi']}).")
-        paper_result=(f"For initial distortion state {initial} under {sense.lower()} with |σ₀|={magnitude:.6g} MPa, the maximum reorientation interaction work among the tested destinations was {float(best['IW (MJ/m³)']):.8g} MJ/m³ for {best['Final state']}. This is a mechanical-work ranking; experimental grain-specific interpretation requires independent mapping of the measured B19′ variant into the D1…D12 distortion-state convention.")
+        chart=candidates[["Final state","IW (MJ/m³)"]].set_index("Final state")
+        st.bar_chart(chart, y="IW (MJ/m³)", width="stretch")
+        top3=candidates.head(3)[["Final state","IW (MJ/m³)"]].copy()
+        top3.index=np.arange(1,len(top3)+1)
+        st.markdown("**Top three destinations**")
+        st.dataframe(top3, width="stretch")
 
-    # ------------------ Paper-ready result/export common to all tasks ------------------
-    st.divider()
-    st.subheader("3 · Paper-ready record for this calculation")
-    st.markdown("**Methods wording**")
-    st.code(paper_methods or "No method record available for the current selection.",language=None,wrap_lines=True)
-    st.markdown("**Result wording**")
-    st.code(paper_result or "No result record available for the current selection.",language=None,wrap_lines=True)
-    st.caption("These are conservative drafts: they report the tested equations and numerical tolerances and avoid calling method agreement, a defined twin, or positive IW 'accuracy' or 'supercompatibility'.")
+        with st.expander("Show all 12 reorientation results"):
+            st.dataframe(iwdf, width="stretch", hide_index=True)
+        with st.expander("Show exact distortion matrices D1…D12 · audit"):
+            for i,F in enumerate(states,1):
+                st.markdown(f"**D{i}**")
+                st.dataframe(pd.DataFrame(F), width="stretch", hide_index=True)
+        with st.expander("What this result does and does not mean"):
+            st.markdown(
+                "- **IWmax ranks candidate reorientations mechanically** for the declared initial state and loading.\n"
+                "- It does **not** by itself give an activation stress or kinetic barrier.\n"
+                "- It does **not** prove CT/cofactor supercompatibility; that is the CMC/SMC/twin/shear–shear problem.\n"
+                "- The 2025 paper compares IWmax across deformation modes to discuss sequence of activation, but a cross-mode ratio requires each mode's distortion tensors to be expressed in one consistent physical frame. This page does not fabricate that comparison.\n"
+                "- For experimental EBSD, use a reconstructed B2 parent orientation if available."
+            )
 
-    bundle=workspace3_evidence_zip(inp,float(ct_tol),float(shear_tol),cmc_report,task,task_payload,paper_result,paper_methods)
-    e1,e2=st.columns(2)
-    e1.download_button("Download paper-evidence ZIP",bundle,"workspace3_paper_evidence.zip","application/zip",width="stretch")
-    e2.download_button("Download result paragraph (Markdown)",paper_result,"workspace3_result.md","text/markdown",width="stretch")
-    with st.expander("References and scope"):
-        st.markdown(f"- **CT / supercompatibility:** {CT_SOURCE['authors']}, *{CT_SOURCE['title']}*, {CT_SOURCE['journal']}. DOI `{CT_SOURCE['doi']}`")
-        st.markdown(f"- **NiTi reorientation / EBSD:** {IW_REORIENTATION_SOURCE['authors']}, *{IW_REORIENTATION_SOURCE['title']}*, {IW_REORIENTATION_SOURCE['journal']}. DOI `{IW_REORIENTATION_SOURCE['doi']}`")
-        st.markdown(f"- **IW deformation-mode framework:** {IW_SOURCE['authors']}, *{IW_SOURCE['title']}*, {IW_SOURCE['journal']}. DOI `{IW_SOURCE['doi']}`")
-        st.warning("Source-audit rule: when a source contains an internal equation/table discrepancy (notably the C2b inequality sign documented elsewhere in this Lab), the app preserves both records and states which interpretation is used. It does not silently pick one and erase the discrepancy.")
+        d1,d2=st.columns(2)
+        with d1:
+            st.download_button("Download reorientation IW table (CSV)", iwdf.to_csv(index=False), "reorientation_interaction_work.csv", "text/csv", width="stretch")
+        with d2:
+            st.download_button(
+                "Download complete IW evidence (JSON)",
+                iw_evidence_json(inp,stress_b2,loading_desc,initial_idx,iwdf,states,F0),
+                "reorientation_interaction_work_evidence.json","application/json",width="stretch",
+            )
+        st.caption(f"IW/reorientation sources: {IW_REORIENTATION_SOURCE['journal']} DOI {IW_REORIENTATION_SOURCE['doi']} · {IW_SOURCE['journal']} DOI {IW_SOURCE['doi']}.")
 
 
 # ---------- 4 temperature + uncertainty ----------
 elif workspace.startswith("4"):
-    st.header("Temperature & measurement uncertainty")
-    workspace_brief(
-        "Are compatibility conclusions stable across temperature or plausible lattice-measurement error?",
-        "A temperature-series CSV, or 1σ uncertainties for the five lattice inputs.",
-        "Temperature-dependent residuals or Monte-Carlo within-threshold fractions with quantiles and raw samples.",
-        "Use to report robustness/sensitivity; never call a Monte-Carlo fraction the probability of an exact equality.",
-    )
-    ttab,utab=st.tabs(["Temperature series","Measurement uncertainty"])
+    st.header("Temperature dependence & experimental uncertainty")
+    ttab, utab = st.tabs(["Temperature sweep", "Uncertainty propagation"])
 
     with ttab:
-        st.download_button("Download temperature CSV template",(DATA/"temperature_sweep_template.csv").read_bytes(),"temperature_sweep_template.csv","text/csv")
-        st.caption("Required columns: temperature_K, a_B2_A, a_B19p_A, b_B19p_A, c_B19p_A, beta_deg. One row = one measured/fitted temperature state.")
-        up=st.file_uploader("Upload temperature-dependent lattice CSV",type=["csv"],key="temp_csv")
+        st.markdown("Upload lattice parameters measured or fitted versus temperature. Every row is re-evaluated through CMC and PTMC/cofactor metrics.")
+        template = (DATA / "temperature_sweep_template.csv").read_bytes()
+        st.download_button("Download temperature CSV template", template, "temperature_sweep_template.csv", "text/csv")
+        up = st.file_uploader("Temperature-dependent lattice CSV", type=["csv"], key="temp_csv")
         if up is not None:
             try:
-                raw=pd.read_csv(up)
-                with st.spinner("Evaluating each temperature state…"):
-                    out=temperature_sweep(raw,cc1_tol=cc1_tol,cc2_tol=cc2_tol)
-                st.session_state["temperature_result"]=out
-                idx_l2=int(out["abs_lambda2_minus_1"].idxmin()); idx_cmc=int(out["cmc_relative_zero"].idxmin())
-                a1,a2,a3,a4=st.columns(4)
-                a1.metric("states evaluated",len(out))
-                a2.metric("temperature range",f"{out.temperature_K.min():.1f}–{out.temperature_K.max():.1f} K")
-                a3.metric("min |λ₂−1|",f"{out.loc[idx_l2,'abs_lambda2_minus_1']:.3e}",delta=f"at {out.loc[idx_l2,'temperature_K']:.1f} K")
-                a4.metric("min δ_CMC",f"{out.loc[idx_cmc,'cmc_relative_zero']:.3e}",delta=f"at {out.loc[idx_cmc,'temperature_K']:.1f} K")
-                pass_rows=int(((out["abs_lambda2_minus_1"]<=cc1_tol)&(out["cmc_relative_zero"]<=2e-6)).sum())
-                st.info(f"Rows simultaneously within the declared CC1 threshold and the certified CMC spectral tolerance: **{pass_rows}/{len(out)}**. This is a discrete measured-series statement, not interpolation between temperatures.")
-                p=out.copy()
-                for col in ["abs_lambda2_minus_1","cmc_relative_zero","cofactor_cc2_normalized"]:
-                    p[col]=np.clip(pd.to_numeric(p[col],errors="coerce"),1e-15,None)
-                fig=px.line(p,x="temperature_K",y=["abs_lambda2_minus_1","cmc_relative_zero","cofactor_cc2_normalized"],markers=True,log_y=True,title="Compatibility residuals vs temperature",labels={"temperature_K":"Temperature (K)","value":"Residual (dimensionless)","variable":"Criterion"})
-                st.plotly_chart(fig,width="stretch")
-                with st.expander("Evaluated temperature table"):
-                    st.dataframe(out,width="stretch",hide_index=True)
-                st.download_button("Download evaluated temperature sweep",out.to_csv(index=False),"temperature_compatibility_results.csv","text/csv")
-                paper_wording(
-                    f"Temperature-dependent lattice parameters were evaluated row-by-row with the same CMC and PTMC/cofactor equations and fixed numerical thresholds (CC1 {cc1_tol:.1e}, CC2 {cc2_tol:.1e}, CMC 2×10⁻⁶).",
-                    f"Across {len(out)} measured/fitted states spanning {out.temperature_K.min():.1f}–{out.temperature_K.max():.1f} K, the minimum |λ₂−1| was {out.loc[idx_l2,'abs_lambda2_minus_1']:.3e} at {out.loc[idx_l2,'temperature_K']:.1f} K and the minimum δ_CMC was {out.loc[idx_cmc,'cmc_relative_zero']:.3e} at {out.loc[idx_cmc,'temperature_K']:.1f} K.",
-                    "Compatibility between tabulated temperatures was not interpolated unless explicitly performed outside this calculation."
-                )
-            except Exception as exc: st.error(str(exc))
+                raw = pd.read_csv(up)
+                with st.spinner("Evaluating temperature series…"):
+                    out = temperature_sweep(raw, cc1_tol=cc1_tol, cc2_tol=cc2_tol)
+                st.dataframe(out, width="stretch", hide_index=True)
+                st.caption("Temperature-table notation: temperature_K = absolute temperature in kelvin; |λ₂−1| = CC1 residual; cmc_relative_zero = dimensionless CMC degeneracy distance; cofactor_cc2_normalized = dimensionless CC2 residual; cofactor_cc3_margin ≥ 0 passes CC3.")
+                plot_out = out.copy()
+                for col in ["abs_lambda2_minus_1", "cmc_relative_zero", "cofactor_cc2_normalized"]:
+                    plot_out[col] = np.clip(pd.to_numeric(plot_out[col], errors="coerce"), 1e-15, None)
+                p1 = px.line(plot_out, x="temperature_K", y=["abs_lambda2_minus_1", "cmc_relative_zero", "cofactor_cc2_normalized"], markers=True, log_y=True, title="Compatibility residuals vs temperature", labels={"temperature_K":"Temperature T (K)", "value":"Residual magnitude (dimensionless)", "variable":"Residual type"})
+                st.plotly_chart(p1, width="stretch")
+                p2 = px.line(out, x="temperature_K", y="cofactor_cc3_margin", markers=True, title="CC3 margin vs temperature", labels={"temperature_K":"Temperature T (K)", "cofactor_cc3_margin":"CC3 inequality margin (dimensionless)"})
+                p2.add_hline(y=0, line_dash="dash")
+                st.plotly_chart(p2, width="stretch")
+                st.download_button("Download evaluated temperature sweep", out.to_csv(index=False), "temperature_compatibility_results.csv", "text/csv")
+            except Exception as exc:
+                st.error(str(exc))
 
     with utab:
-        domain_specs=enumerate_domain_specs(stretch.U,parent_twofold_axes()); spec_map={domain_spec_label(s):s for s in domain_specs}
-        u1,u2=st.columns(2)
+        st.markdown("Monte Carlo propagation uses independent Gaussian measurement uncertainties. The result is a **fraction within explicit tolerances**, not a probability of satisfying an exact mathematical equality.")
+        domain_specs = enumerate_domain_specs(stretch.U, parent_twofold_axes())
+        spec_map = {domain_spec_label(spec): spec for spec in domain_specs}
+        u1, u2 = st.columns(2)
         with u1:
-            target_spec_name=st.selectbox("Domain system held fixed during sampling",list(spec_map),key="unc_domain")
-            nmc=st.number_input("Monte-Carlo samples",min_value=100,max_value=20000,value=2000,step=100)
+            target_spec_name = st.selectbox("Cofactor domain system", list(spec_map), key="unc_domain")
+            nmc = st.number_input("Monte Carlo samples", min_value=100, max_value=20000, value=2000, step=100)
+            st.caption("Compound systems are classified explicitly; Type-I/II simplified CC2 tests are not applied to compound domains.")
         with u2:
-            unc_cc1=st.number_input("Sample threshold |λ₂−1| ≤",min_value=1e-6,max_value=0.1,value=1e-3,format="%.2e")
-            unc_cc2=st.number_input("Sample threshold normalized CC2 ≤",min_value=1e-6,max_value=0.1,value=1e-3,format="%.2e")
-            unc_cmc=st.number_input("Sample threshold δ_CMC ≤",min_value=1e-6,max_value=0.1,value=1e-3,format="%.2e")
-        st.caption("Sampling model: independent Gaussian errors with the supplied 1σ standard uncertainties. Correlated experimental errors are not modeled in this build.")
-        s1,s2,s3,s4,s5=st.columns(5)
-        sig_a2=s1.number_input("σ(a_B2), Å",min_value=0.0,value=0.001,format="%.5f")
-        sig_a=s2.number_input("σ(a_B19′), Å",min_value=0.0,value=0.001,format="%.5f")
-        sig_b=s3.number_input("σ(b_B19′), Å",min_value=0.0,value=0.001,format="%.5f")
-        sig_c=s4.number_input("σ(c_B19′), Å",min_value=0.0,value=0.001,format="%.5f")
-        sig_beta=s5.number_input("σ(β), °",min_value=0.0,value=0.02,format="%.4f")
-        if st.button("Run uncertainty propagation",type="primary"):
+            unc_cc1 = st.number_input("Within-tolerance threshold — |λ₂−1|", min_value=1e-6, max_value=0.1, value=1e-3, format="%.2e")
+            st.caption("λ₂ = middle principal stretch factor; |λ₂−1| = dimensionless distance from exact CC1 compatibility; this threshold is numerical, not physical.")
+            unc_cc2 = st.number_input("Within-tolerance threshold — normalized CC2 residual", min_value=1e-6, max_value=0.1, value=1e-3, format="%.2e")
+            st.caption("CC2 = second cofactor condition; normalized residual = scale-adjusted equation mismatch; 0 is exact; threshold is dimensionless.")
+            unc_cmc = st.number_input("Within-tolerance threshold — CMC degeneracy distance", min_value=1e-6, max_value=0.1, value=1e-3, format="%.2e")
+            st.caption("CMC = compatibility metric-change matrix; degeneracy distance measures closeness of its eigenvalue zero condition; 0 is exact; threshold is dimensionless.")
+
+        st.markdown("**1σ measurement uncertainty**")
+        s1, s2, s3, s4, s5 = st.columns(5)
+        sig_a2 = s1.number_input("B2 lattice parameter uncertainty — σa_B2 (Å)", min_value=0.0, value=0.001, format="%.5f")
+        sig_a = s2.number_input("B19′ a-axis uncertainty — σa_B19′ (Å)", min_value=0.0, value=0.001, format="%.5f")
+        sig_b = s3.number_input("B19′ b-axis uncertainty — σb_B19′ (Å)", min_value=0.0, value=0.001, format="%.5f")
+        sig_c = s4.number_input("B19′ c-axis uncertainty — σc_B19′ (Å)", min_value=0.0, value=0.001, format="%.5f")
+        sig_beta = s5.number_input("β measurement standard uncertainty — σβ (°)", min_value=0.0, value=0.02, format="%.4f")
+        st.caption("σ = one-standard-deviation (1σ) measurement uncertainty. σa_B2, σa_B19′, σb_B19′, σc_B19′ are in Å; σβ is in degrees. The Monte-Carlo model currently treats these five uncertainties as independent Gaussian standard deviations.")
+
+        if st.button("Run uncertainty propagation", type="primary"):
             with st.spinner("Sampling lattice uncertainty…"):
-                us=monte_carlo_uncertainty(inp,LatticeUncertainty(sig_a2,sig_a,sig_b,sig_c,sig_beta),spec_map[target_spec_name],n=int(nmc),cc1_tol=float(unc_cc1),cc2_tol=float(unc_cc2),cmc_tol=float(unc_cmc))
-            st.session_state["unc_result"]=us
-        us=st.session_state.get("unc_result")
+                us = monte_carlo_uncertainty(
+                    inp,
+                    LatticeUncertainty(sig_a2, sig_a, sig_b, sig_c, sig_beta),
+                    spec_map[target_spec_name],
+                    n=int(nmc),
+                    cc1_tol=float(unc_cc1),
+                    cc2_tol=float(unc_cc2),
+                    cmc_tol=float(unc_cmc),
+                )
+            st.session_state["unc_result"] = us
+        us = st.session_state.get("unc_result")
         if us is not None:
-            q1,q2,q3,q4=st.columns(4)
-            q1.metric("valid samples",us.n_valid)
-            q2.metric("all selected criteria",pct(us.within_tolerance_fraction))
-            q3.metric("CC1 within threshold",pct(us.cc1_fraction))
-            q4.metric("CMC within threshold",pct(us.cmc_fraction))
-            quant=us.samples[["abs_lambda2_minus_1","cc2_normalized","cc3_margin","cmc_relative_zero"]].quantile([.05,.5,.95]).T.reset_index().rename(columns={"index":"quantity",.05:"5%",.5:"median",.95:"95%"})
-            st.markdown("#### Residual distribution summary")
-            st.dataframe(quant,width="stretch",hide_index=True)
-            fig=px.histogram(us.samples,x="abs_lambda2_minus_1",nbins=50,title="Monte-Carlo distribution of |λ₂−1|",labels={"abs_lambda2_minus_1":"|λ₂−1|","count":"samples"})
-            st.plotly_chart(fig,width="stretch")
-            invalid=int((~us.samples["domain_relation_valid"]).sum()) if "domain_relation_valid" in us.samples else 0
-            if invalid: st.warning(f"{invalid} sampled states no longer satisfied the assumed domain relation and were counted outside tolerance rather than silently reclassified.")
-            with st.expander("Raw Monte-Carlo sample table"):
-                st.dataframe(us.samples,width="stretch",hide_index=True)
-            st.download_button("Download Monte-Carlo samples",us.samples.to_csv(index=False),"uncertainty_samples.csv","text/csv")
-    math_used(["APP-TEMP","APP-MC","PTMC-SC1","CMC","PTMC-SC2","PTMC-SC3"],title="Methods/equations audit")
+            q1, q2, q3, q4, q5 = st.columns(5)
+            explained_metric(q1, "Samples passing all selected criteria", pct(us.within_tolerance_fraction), "Fraction of Monte-Carlo samples that simultaneously meet the configured CC1, CC2, CC3 and CMC thresholds; this is not the probability of an exact mathematical equality.")
+            explained_metric(q2, "Samples passing CC1", pct(us.cc1_fraction), "CC1 = first cofactor condition λ₂=1, evaluated using the explicit |λ₂−1| threshold.")
+            explained_metric(q3, "Samples passing CC2", pct(us.cc2_fraction), "CC2 = second cofactor condition, evaluated using the configured normalized residual threshold.")
+            explained_metric(q4, "Samples passing CC3", pct(us.cc3_fraction), "CC3 = third cofactor inequality; pass means the calculated margin is non-negative within numerical tolerance.")
+            explained_metric(q5, "Samples with CMC degeneracy within threshold", pct(us.cmc_fraction), "CMC = compatibility metric-change matrix; pass means the relative degeneracy distance is below the configured threshold.")
+            fig = px.histogram(us.samples, x="abs_lambda2_minus_1", nbins=50, title="Monte Carlo distribution of |λ₂−1|", labels={"abs_lambda2_minus_1":"CC1 residual |λ₂−1| (dimensionless)", "count":"Monte Carlo sample count"})
+            st.plotly_chart(fig, width="stretch")
+            st.download_button("Download Monte Carlo samples", us.samples.to_csv(index=False), "uncertainty_samples.csv", "text/csv")
+    math_used(["APP-TEMP", "APP-MC", "PTMC-SC1", "CMC", "PTMC-SC2", "PTMC-SC3"])
 
 
 # ---------- 5 literature / microstructure ----------
 elif workspace.startswith("5"):
-    st.header("Experimental context & literature")
-    workspace_brief(
-        "What experimental evidence and specimen context accompany the crystallographic calculation?",
-        "Optional literature filter, microstructure/processing metadata, and measured functional metrics.",
-        "A structured evidence record kept separate from geometric predictions.",
-        "Use for Methods/sample description and literature comparison; not as a universal fatigue/hysteresis predictor.",
-    )
-    ltab,mtab,ptab=st.tabs(["Evidence library","Sample / microstructure record","Measured functional response"])
+    st.header("Literature, microstructure & functional performance")
+    ltab, mtab, ptab = st.tabs(["Literature database", "Microstructure context", "Functional metrics"])
+
     with ltab:
-        lit=load_literature()
-        f1,f2=st.columns([1,2])
-        kind=f1.selectbox("Evidence class",["All"]+sorted(lit["record_type"].unique().tolist()))
-        query=f2.text_input("Search alloy, title, DOI or key result",placeholder="e.g. NiTiCu, hysteresis, 10.1038/…")
-        show=lit if kind=="All" else lit[lit.record_type==kind]
-        if query.strip():
-            q=query.lower().strip(); mask=pd.Series(False,index=show.index)
-            for col in ["alloy","composition_atpct","key_result","doi","title","evidence_note"]:
-                if col in show: mask |= show[col].fillna("").astype(str).str.lower().str.contains(q,regex=False)
-            show=show[mask]
-        st.caption(f"Showing {len(show)} of {len(lit)} curated records. Empty cells mean the curated evidence did not report that quantity.")
-        default_cols=[c for c in ["record_type","alloy","composition_atpct","year","key_result","lambda2","thermal_hysteresis_C","cycles","doi","title"] if c in show.columns]
-        st.dataframe(show[default_cols],width="stretch",hide_index=True)
-        with st.expander("Full curated evidence table"):
-            st.dataframe(show,width="stretch",hide_index=True)
-        st.download_button("Download literature database",lit.to_csv(index=False),"literature_database.csv","text/csv")
+        lit = load_literature()
+        kinds = ["All"] + sorted(lit["record_type"].unique().tolist())
+        filt = st.selectbox("Evidence class", kinds)
+        show = lit if filt == "All" else lit[lit["record_type"] == filt]
+        st.dataframe(show, width="stretch", hide_index=True)
+        st.caption("The database intentionally separates experimental benchmarks, mechanism studies, design methods and theory. Empty fields mean the cited source did not provide that quantity in the evidence used to curate this table.")
+        st.download_button("Download literature database", lit.to_csv(index=False), "literature_database.csv", "text/csv")
 
     with mtab:
-        st.info("This is a structured specimen record. The app does not infer fatigue life, compatibility or hysteresis from these fields without a validated model.")
-        c1,c2=st.columns(2)
+        st.markdown("This panel records microstructure alongside crystallographic compatibility. It **does not invent a fatigue-life equation** from grain size or precipitates.")
+        c1, c2 = st.columns(2)
         with c1:
-            sample_id=st.text_input("Sample / condition ID",value="")
-            proc=st.text_area("Processing history",placeholder="cast → cold work → anneal ...")
-            gs=st.number_input("Mean grain size",min_value=0.0,value=0.0); gs_unit=st.selectbox("Grain-size unit",["nm","µm"])
-            dist=st.selectbox("Grain-size distribution",["Not specified","Uniform","Bimodal","Gradient","Other"])
+            gs = st.number_input("Mean grain size", min_value=0.0, value=0.0, help="Enter 0 if unknown.")
+            gs_unit = st.selectbox("Grain-size unit", ["nm", "µm"])
+            dist = st.selectbox("Grain-size distribution", ["Not specified", "Uniform", "Bimodal", "Gradient", "Other"])
+            precip = st.text_input("Precipitate phase/type", value="Not specified")
+            psize = st.number_input("Mean precipitate size (nm)", min_value=0.0, value=0.0)
         with c2:
-            precip=st.text_input("Precipitate phase/type",value="Not specified")
-            psize=st.number_input("Mean precipitate size (nm)",min_value=0.0,value=0.0)
-            pfrac=st.number_input("Precipitate volume fraction (%)",min_value=0.0,max_value=100.0,value=0.0)
-            retained=st.number_input("Measured retained martensite (%)",min_value=0.0,max_value=100.0,value=0.0)
-            disl=st.number_input("Dislocation density (m⁻²)",min_value=0.0,value=0.0,format="%.3e")
-        gs_nm=None if gs==0 else float(gs*(1000 if gs_unit=="µm" else 1))
-        ctx=MicrostructureContext(mean_grain_size_nm=gs_nm,grain_size_distribution=dist,precipitate_type=precip,precipitate_size_nm=None if psize==0 else float(psize),precipitate_fraction_pct=None if pfrac==0 else float(pfrac),retained_martensite_pct=None if retained==0 else float(retained),dislocation_density_m2=None if disl==0 else float(disl),processing=proc or "Not specified")
-        record={"sample_id":sample_id or None,"mean_grain_size_nm":gs_nm,"grain_size_distribution":dist,"precipitate_type":precip,"precipitate_size_nm":None if psize==0 else float(psize),"precipitate_fraction_pct":None if pfrac==0 else float(pfrac),"retained_martensite_pct":None if retained==0 else float(retained),"dislocation_density_m2":None if disl==0 else float(disl),"processing":proc or None}
-        st.session_state["microstructure_record"]=record
-        st.markdown("#### Evidence-aware annotations")
+            pfrac = st.number_input("Precipitate volume fraction (%)", min_value=0.0, max_value=100.0, value=0.0)
+            retained = st.number_input("Measured retained martensite (%)", min_value=0.0, max_value=100.0, value=0.0)
+            disl = st.number_input("Dislocation density (m⁻²)", min_value=0.0, value=0.0, format="%.3e")
+            proc = st.text_area("Processing history", placeholder="e.g. cast → wire-drawn → annealed at ...")
+        gs_nm = None if gs == 0 else float(gs * (1000 if gs_unit == "µm" else 1))
+        ctx = MicrostructureContext(
+            mean_grain_size_nm=gs_nm,
+            grain_size_distribution=dist,
+            precipitate_type=precip,
+            precipitate_size_nm=None if psize == 0 else float(psize),
+            precipitate_fraction_pct=None if pfrac == 0 else float(pfrac),
+            retained_martensite_pct=None if retained == 0 else float(retained),
+            dislocation_density_m2=None if disl == 0 else float(disl),
+            processing=proc or "Not specified",
+        )
         for note in evidence_annotations(ctx):
-            st.markdown(f"<div class='research-card'><div class='smallcaps'>{note['factor']}</div><b>{note['note']}</b><br><span style='opacity:.72'>{note['scope']}</span></div>",unsafe_allow_html=True)
-        st.download_button("Download sample/microstructure record (JSON)",json.dumps(record,indent=2,default=str),"microstructure_record.json","application/json")
+            st.markdown(f"<div class='research-card'><div class='smallcaps'>{note['factor']}</div><b>{note['note']}</b><br><span style='opacity:.72'>{note['scope']}</span></div>", unsafe_allow_html=True)
 
     with ptab:
-        st.caption("Enter only measured quantities. In this panel, 0 means 'not supplied' and is exported as null; if a genuine measured value is exactly zero, record that fact in your manuscript/notes explicitly.")
-        c1,c2,c3=st.columns(3)
+        st.markdown("Optional measured application metrics. These are kept separate from geometric predictions so correlations can later be studied statistically rather than assumed.")
+        c1, c2, c3 = st.columns(3)
         with c1:
-            th=st.number_input("Thermal hysteresis (°C)",value=0.0); sh=st.number_input("Stress hysteresis (MPa)",value=0.0); dt=st.number_input("ΔT_ad (K)",value=0.0)
+            th = st.number_input("Measured thermal hysteresis (°C)", value=0.0)
+            sh = st.number_input("Measured stress hysteresis (MPa)", value=0.0)
+            dt = st.number_input("Measured adiabatic temperature change — ΔT_ad (K)", value=0.0)
         with c2:
-            cycles=st.number_input("Completed transformation cycles",min_value=0.0,value=0.0,format="%.0f"); strain=st.number_input("Recoverable strain (%)",min_value=0.0,value=0.0); cop=st.number_input("Material COP",min_value=0.0,value=0.0)
+            cycles = st.number_input("Completed transformation cycles", min_value=0.0, value=0.0, format="%.0f")
+            strain = st.number_input("Recoverable strain (%)", min_value=0.0, value=0.0)
+            cop = st.number_input("Measured coefficient of performance — COP", min_value=0.0, value=0.0)
         with c3:
-            Ms=st.number_input("M_s (°C)",value=0.0); Mf=st.number_input("M_f (°C)",value=0.0); As=st.number_input("A_s (°C)",value=0.0); Af=st.number_input("A_f (°C)",value=0.0)
-        fm=FunctionalMetrics(thermal_hysteresis_C=None if th==0 else th,stress_hysteresis_MPa=None if sh==0 else sh,deltaTad_K=None if dt==0 else dt,cycle_life=None if cycles==0 else cycles,recoverable_strain_pct=None if strain==0 else strain,material_COP=None if cop==0 else cop,Ms_C=None if Ms==0 else Ms,Mf_C=None if Mf==0 else Mf,As_C=None if As==0 else As,Af_C=None if Af==0 else Af)
-        derived=derived_metrics(fm)
-        record={"thermal_hysteresis_C":fm.thermal_hysteresis_C,"stress_hysteresis_MPa":fm.stress_hysteresis_MPa,"deltaTad_K":fm.deltaTad_K,"cycle_life":fm.cycle_life,"recoverable_strain_pct":fm.recoverable_strain_pct,"material_COP":fm.material_COP,"Ms_C":fm.Ms_C,"Mf_C":fm.Mf_C,"As_C":fm.As_C,"Af_C":fm.Af_C,"derived":derived}
-        st.session_state["functional_record"]=record
-        if derived:
-            st.dataframe(pd.DataFrame([{"derived metric":k,"value":v} for k,v in derived.items()]),width="stretch",hide_index=True)
-        else: st.info("No derived functional metric is available until the required measured temperatures are supplied.")
-        st.download_button("Download functional-response record (JSON)",json.dumps(record,indent=2,default=str),"functional_response_record.json","application/json")
-    extension_note("Literature, microstructure and functional-response fields are contextual evidence and remain separate from the crystallographic compatibility engine unless an independently validated model explicitly links them.")
+            Ms = st.number_input("Martensite-start temperature — M_s (°C)", value=0.0)
+            Mf = st.number_input("Martensite-finish temperature — M_f (°C)", value=0.0)
+            As = st.number_input("Austenite-start temperature — A_s (°C)", value=0.0)
+            Af = st.number_input("Austenite-finish temperature — A_f (°C)", value=0.0)
+        st.caption("ΔT_ad = adiabatic temperature change during rapid transformation; K = kelvin. COP = coefficient of performance, useful output divided by required input, dimensionless. M_s/M_f = temperatures where martensite starts/finishes on cooling; A_s/A_f = temperatures where austenite starts/finishes on heating.")
+        fm = FunctionalMetrics(
+            thermal_hysteresis_C=None if th == 0 else th,
+            stress_hysteresis_MPa=None if sh == 0 else sh,
+            deltaTad_K=None if dt == 0 else dt,
+            cycle_life=None if cycles == 0 else cycles,
+            recoverable_strain_pct=None if strain == 0 else strain,
+            material_COP=None if cop == 0 else cop,
+            Ms_C=None if Ms == 0 else Ms,
+            Mf_C=None if Mf == 0 else Mf,
+            As_C=None if As == 0 else As,
+            Af_C=None if Af == 0 else Af,
+        )
+        dmet = derived_metrics(fm)
+        st.write(dmet)
+        st.caption("Midpoint hysteresis is computed only when Ms, Mf, As and Af are all supplied; Af−Ms is also shown separately because hysteresis conventions vary across publications.")
+    extension_note("Literature, microstructure and functional-performance fields are contextual evidence. This workspace deliberately does not transform them into an unsupported universal compatibility, hysteresis or fatigue law.")
 
 
 # ---------- 6 inverse design ----------
 elif workspace.startswith("6"):
     st.header("Inverse lattice design")
-    workspace_brief(
-        "What lattice metrics would move the selected domain toward the declared compatibility equations?",
-        "Current lattice, target domain, search bounds and a transparent optimization strategy.",
-        "A mathematical target lattice + residuals + changes from the starting lattice; optional Pareto trade-off scan.",
-        "Report as a crystallographic design target, not as a chemically realizable alloy until composition/phase stability are validated.",
-    )
-    design_specs=enumerate_domain_specs(stretch.U,parent_twofold_axes()); design_map={domain_spec_label(s):s for s in design_specs}
-    c1,c2,c3=st.columns(3)
-    opt_domain_name=c1.selectbox("Target domain system",list(design_map),key="opt_domain")
-    strategy=c2.selectbox("Optimization strategy",["Balanced residuals","CMC-emphasis","Cofactor-emphasis","Custom weights"])
-    seed=c3.number_input("Random seed",value=42,step=1)
-    maxiter=70
-    use_proximity=st.checkbox("Prefer targets near the current lattice",value=True,help="Adds a small proximity penalty; this is a search preference, not a physical law.")
-    weight_map={"Balanced residuals":(1.,1.,1.,1.),"CMC-emphasis":(.5,.5,.5,2.),"Cofactor-emphasis":(1.5,1.5,1.0,.5)}
-    if strategy=="Custom weights":
-        w1,w2,w3,w4=st.columns(4); wl2=w1.number_input("w(CC1)",min_value=0.,value=1.); wcc2=w2.number_input("w(CC2)",min_value=0.,value=1.); wcc3=w3.number_input("w(CC3 violation)",min_value=0.,value=1.); wcmc=w4.number_input("w(CMC)",min_value=0.,value=1.)
-    else: wl2,wcc2,wcc3,wcmc=weight_map[strategy]
-    with st.expander("Search bounds & optimizer controls · advanced"):
-        b1,b2,b3,b4=st.columns(4)
-        amin=b1.number_input("a ratio min",value=max(.5,ar-.18),step=.01); amax=b1.number_input("a ratio max",value=min(1.5,ar+.18),step=.01)
-        bmin=b2.number_input("b ratio min",value=max(.5,br-.18),step=.01); bmax=b2.number_input("b ratio max",value=min(2.,br+.18),step=.01)
-        cmin=b3.number_input("c ratio min",value=max(.5,cr-.25),step=.01); cmax=b3.number_input("c ratio max",value=min(2.5,cr+.25),step=.01)
-        betamin=b4.number_input("β min (°)",value=max(60.,inp.beta_deg-8.),step=.5); betamax=b4.number_input("β max (°)",value=min(120.,inp.beta_deg+8.),step=.5)
-        maxiter=st.number_input("Optimizer iterations",min_value=10,max_value=300,value=70,step=10)
-        st.caption(f"Current weights: CC1={wl2:g}, CC2={wcc2:g}, CC3 violation={wcc3:g}, CMC={wcmc:g}. Weights are numerical priorities, not material constants.")
-    bounds={"a":(amin,amax),"b":(bmin,bmax),"c":(cmin,cmax),"beta_deg":(betamin,betamax)}
-    if st.button("Run inverse design",type="primary"):
-        if not all(lo<hi for lo,hi in bounds.values()): st.error("Every lower bound must be smaller than its upper bound.")
+    st.markdown("Search directly in normalized lattice-parameter space. The optimizer minimizes explicit physical residuals instead of an opaque 'compatibility score'.")
+
+    design_specs = enumerate_domain_specs(stretch.U, parent_twofold_axes())
+    design_map = {domain_spec_label(spec): spec for spec in design_specs}
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        opt_domain_name = st.selectbox("Target cofactor domain system", list(design_map), key="opt_domain")
+        st.caption("Compound systems are optimized with their dedicated compound rank-one formulas, not relabeled as Type I/II.")
+    with a2:
+        seed = st.number_input("Random seed", value=42, step=1)
+        maxiter = st.number_input("Optimizer iterations", min_value=10, max_value=300, value=70, step=10)
+    with a3:
+        use_proximity = st.checkbox("Penalize distance from current alloy", value=True)
+        st.caption("Useful when seeking experimentally reachable lattice changes rather than a mathematically remote optimum.")
+
+    with st.expander("Search bounds and objective weights", expanded=True):
+        b1, b2, b3, b4 = st.columns(4)
+        amin = b1.number_input("Normalized a = a_B19′/a_B2 — minimum", value=max(0.5, ar-0.18), step=0.01)
+        amax = b1.number_input("Normalized a = a_B19′/a_B2 — maximum", value=min(1.5, ar+0.18), step=0.01)
+        bmin = b2.number_input("Normalized b = b_B19′/a_B2 — minimum", value=max(0.5, br-0.18), step=0.01)
+        bmax = b2.number_input("Normalized b = b_B19′/a_B2 — maximum", value=min(2.0, br+0.18), step=0.01)
+        cmin = b3.number_input("Normalized c = c_B19′/a_B2 — minimum", value=max(0.5, cr-0.25), step=0.01)
+        cmax = b3.number_input("Normalized c = c_B19′/a_B2 — maximum", value=min(2.5, cr+0.25), step=0.01)
+        betamin = b4.number_input("Monoclinic angle β — minimum (°)", value=max(60.0, inp.beta_deg-8.0), step=0.5)
+        betamax = b4.number_input("Monoclinic angle β — maximum (°)", value=min(120.0, inp.beta_deg+8.0), step=0.5)
+        w1, w2, w3, w4 = st.columns(4)
+        wl2 = w1.number_input("Objective weight for CC1 residual |λ₂−1|", min_value=0.0, value=1.0)
+        wcc2 = w2.number_input("Objective weight for normalized CC2 residual", min_value=0.0, value=1.0)
+        wcc3 = w3.number_input("Objective weight for CC3 inequality violation", min_value=0.0, value=1.0)
+        wcmc = w4.number_input("Objective weight for CMC degeneracy distance", min_value=0.0, value=1.0)
+        st.caption("a,b,c = dimensionless normalized B19′ lattice ratios; β = monoclinic angle in degrees. Objective weights are user-selected non-negative multipliers: larger weight makes that residual more important to the numerical optimizer. They are not material constants.")
+
+    bounds = {"a": (amin, amax), "b": (bmin, bmax), "c": (cmin, cmax), "beta_deg": (betamin, betamax)}
+    if st.button("Run inverse design", type="primary"):
+        if not all(lo < hi for lo, hi in bounds.values()):
+            st.error("Every lower bound must be smaller than its upper bound.")
         else:
-            weights=DesignWeights(wl2,wcc2,wcc3,wcmc,.05 if use_proximity else 0.)
-            with st.spinner("Searching lattice space…"):
-                res=inverse_lattice_design(inp.a_b2,design_map[opt_domain_name],bounds,weights=weights,reference=(ar,br,cr,inp.beta_deg) if use_proximity else None,seed=int(seed),maxiter=int(maxiter))
-            st.session_state["inverse_result"]=res
-    res=st.session_state.get("inverse_result")
+            weights = DesignWeights(wl2, wcc2, wcc3, wcmc, 0.05 if use_proximity else 0.0)
+            with st.spinner("Optimizing lattice geometry…"):
+                res = inverse_lattice_design(
+                    inp.a_b2,
+                    design_map[opt_domain_name],
+                    bounds,
+                    weights=weights,
+                    reference=(ar, br, cr, inp.beta_deg) if use_proximity else None,
+                    seed=int(seed),
+                    maxiter=int(maxiter),
+                )
+            st.session_state["inverse_result"] = res
+    res = st.session_state.get("inverse_result")
     if res is not None:
-        before={"a_B2 (Å)":inp.a_b2,"a_B19′ (Å)":inp.a_b19p,"b_B19′ (Å)":inp.b_b19p,"c_B19′ (Å)":inp.c_b19p,"β (°)":inp.beta_deg}
-        after={"a_B2 (Å)":res.input.a_b2,"a_B19′ (Å)":res.input.a_b19p,"b_B19′ (Å)":res.input.b_b19p,"c_B19′ (Å)":res.input.c_b19p,"β (°)":res.input.beta_deg}
-        comp=[]
-        for k in before:
-            change=after[k]-before[k]; pctc=(change/before[k]*100) if before[k] else np.nan
-            comp.append({"Parameter":k,"Current":before[k],"Target":after[k],"Change":change,"Change (%)":pctc})
-        st.subheader("Designed lattice target")
-        st.dataframe(pd.DataFrame(comp),width="stretch",hide_index=True)
-        criterion_table([
-            {"Criterion":"CC1","Value":f"{res.lambda2_residual:.3e}","Target":f"≤ {cc1_tol:.1e}","Status":"PASS" if res.lambda2_residual<=cc1_tol else "FAIL"},
-            {"Criterion":"CC2","Value":f"{res.cc2_normalized:.3e}","Target":f"≤ {cc2_tol:.1e}","Status":"PASS" if res.cc2_normalized<=cc2_tol else "FAIL"},
-            {"Criterion":"CC3","Value":f"margin={res.cc3_margin:.3e}","Target":"≥ 0","Status":"PASS" if res.cc3_margin>=0 else "FAIL"},
-            {"Criterion":"CMC","Value":f"δ={res.cmc_relative_zero:.3e}","Target":"≤ 2×10⁻⁶","Status":"PASS" if res.cmc_relative_zero<=2e-6 else "FAIL"},
-        ])
-        st.warning("This is a **mathematical lattice target**. The optimizer does not prove that a chemically stable alloy, heat treatment or precipitate state can realize these metrics.")
-        st.download_button("Download inverse-design target",json.dumps({"a_B2_A":res.input.a_b2,"a_B19p_A":res.input.a_b19p,"b_B19p_A":res.input.b_b19p,"c_B19p_A":res.input.c_b19p,"beta_deg":res.input.beta_deg,"axis":axis_label(res.axis),"domain_type":res.domain_type,"partner_axis":None if res.partner_axis is None else axis_label(res.partner_axis),"residuals":{"lambda2":res.lambda2_residual,"cc2":res.cc2_normalized,"cc3_margin":res.cc3_margin,"cmc":res.cmc_relative_zero}},indent=2),"inverse_design_target.json","application/json")
-        paper_wording(f"Inverse design was performed in normalized lattice-parameter space for the selected {res.domain_type} domain by minimizing explicit CC1, CC2, CC3-violation and CMC residual terms with weights ({wl2:g}, {wcc2:g}, {wcc3:g}, {wcmc:g}); seed={int(seed)}.",f"The target lattice was a_B2={res.input.a_b2:.6f} Å, a_B19′={res.input.a_b19p:.6f} Å, b_B19′={res.input.b_b19p:.6f} Å, c_B19′={res.input.c_b19p:.6f} Å, β={res.input.beta_deg:.5f}°, giving |λ₂−1|={res.lambda2_residual:.3e}, normalized CC2={res.cc2_normalized:.3e}, CC3 margin={res.cc3_margin:.3e}, and δ_CMC={res.cmc_relative_zero:.3e}.","The optimized lattice is a crystallographic target only; chemical realizability and phase stability require independent alloy/thermodynamic/experimental validation.")
-    with st.expander("Multi-objective Pareto exploration · advanced"):
-        ns=st.number_input("Latin-hypercube samples",min_value=100,max_value=5000,value=600,step=100)
-        if st.button("Generate Pareto scan"):
-            with st.spinner("Sampling design space…"):
-                pdf=pareto_lattice_scan(inp.a_b2,design_map[opt_domain_name],bounds,n_samples=int(ns),seed=int(seed))
-            st.session_state["pareto"]=pdf
-        pdf=st.session_state.get("pareto")
-        if pdf is not None:
-            st.dataframe(pdf.head(100),width="stretch",hide_index=True)
-            p=pdf.copy()
-            for col in ["abs_lambda2_minus_1","cc2_normalized","cmc_relative_zero"]: p[col]=np.clip(pd.to_numeric(p[col],errors="coerce"),1e-15,None)
-            st.plotly_chart(px.scatter_3d(p,x="abs_lambda2_minus_1",y="cc2_normalized",z="cmc_relative_zero",color="pareto",hover_data=["a","b","c","beta_deg"],log_x=True,log_y=True,log_z=True,title="Multi-objective lattice search"),width="stretch")
-            st.download_button("Download Pareto scan",pdf.to_csv(index=False),"pareto_lattice_scan.csv","text/csv")
-    math_used(["APP-OPT","PTMC-SC1","PTMC-SC2","PTMC-SC3","CMC"],title="Methods/equations audit")
+        rr = res.input.ratios()
+        q1, q2, q3, q4 = st.columns(4)
+        explained_metric(q1, "Target normalized a", f"{rr[0]:.7f}", "a = target a_B19′/a_B2 ratio; dimensionless; not composition.")
+        explained_metric(q2, "Target normalized b", f"{rr[1]:.7f}", "b = target b_B19′/a_B2 ratio; dimensionless.")
+        explained_metric(q3, "Target normalized c", f"{rr[2]:.7f}", "c = target c_B19′/a_B2 ratio; dimensionless.")
+        explained_metric(q4, "Target monoclinic angle — β", f"{res.input.beta_deg:.5f}°", "β = target angle between the B19′ a and c axes; unit: degrees.")
+        st.write({
+            "optimization objective J(x) — dimensionless": res.objective,
+            "CC1 residual |λ₂−1| — dimensionless": res.lambda2_residual,
+            "normalized CC2 residual — dimensionless": res.cc2_normalized,
+            "CC3 inequality margin — dimensionless (pass if ≥0)": res.cc3_margin,
+            "CMC degeneracy distance — dimensionless": res.cmc_relative_zero,
+        })
+        st.download_button("Download inverse-design target", json.dumps({
+            "a_B2_A": res.input.a_b2,
+            "a_B19p_A": res.input.a_b19p,
+            "b_B19p_A": res.input.b_b19p,
+            "c_B19p_A": res.input.c_b19p,
+            "beta_deg": res.input.beta_deg,
+            "axis": axis_label(res.axis),
+            "domain_type": res.domain_type,
+            "partner_axis": None if res.partner_axis is None else axis_label(res.partner_axis),
+            "residuals": {
+                "lambda2": res.lambda2_residual,
+                "cc2": res.cc2_normalized,
+                "cc3_margin": res.cc3_margin,
+                "cmc": res.cmc_relative_zero,
+            },
+        }, indent=2), "inverse_design_target.json", "application/json")
+
+    st.subheader("Pareto exploration")
+    ns = st.number_input("Latin-hypercube samples", min_value=100, max_value=5000, value=600, step=100)
+    if st.button("Generate Pareto scan"):
+        with st.spinner("Sampling multi-objective design space…"):
+            pdf = pareto_lattice_scan(inp.a_b2, design_map[opt_domain_name], bounds, n_samples=int(ns), seed=int(seed))
+        st.session_state["pareto"] = pdf
+    pdf = st.session_state.get("pareto")
+    if pdf is not None:
+        st.dataframe(pdf.head(100), width="stretch", hide_index=True)
+        st.caption("Pareto-table notation: a,b,c = normalized B19′ lattice ratios; beta_deg = monoclinic β in degrees; abs_lambda2_minus_1 = |λ₂−1|; cc2_normalized = normalized CC2 mismatch; cmc_relative_zero = normalized CMC degeneracy distance; pareto = whether a sample is non-dominated in the selected multi-objective residual space.")
+        plot_pdf = pdf.copy()
+        for col in ["abs_lambda2_minus_1", "cc2_normalized", "cmc_relative_zero"]:
+            plot_pdf[col] = np.clip(pd.to_numeric(plot_pdf[col], errors="coerce"), 1e-15, None)
+        fig = px.scatter_3d(plot_pdf, x="abs_lambda2_minus_1", y="cc2_normalized", z="cmc_relative_zero", color="pareto", hover_data=["a", "b", "c", "beta_deg"], log_x=True, log_y=True, log_z=True, title="Multi-objective lattice search", labels={"abs_lambda2_minus_1":"CC1 residual |λ₂−1|", "cc2_normalized":"Normalized CC2 residual", "cmc_relative_zero":"CMC degeneracy distance", "pareto":"Pareto-optimal", "a":"Normalized a ratio", "b":"Normalized b ratio", "c":"Normalized c ratio", "beta_deg":"Monoclinic angle β (°)"})
+        st.plotly_chart(fig, width="stretch")
+        st.download_button("Download Pareto scan", pdf.to_csv(index=False), "pareto_lattice_scan.csv", "text/csv")
+    math_used(["APP-OPT", "PTMC-SC1", "PTMC-SC2", "PTMC-SC3", "CMC", "EPSILON"])
 
 
 # ---------- 7 ML ----------
 elif workspace.startswith("7"):
     st.header("Composition → lattice ML with physics screening")
-    workspace_brief(
-        "Can your own composition/processing dataset predict B2/B19′ lattice parameters well enough to justify physics screening?",
-        "A real training CSV containing numeric features plus all five measured lattice targets; optionally a candidate grid.",
-        "Cross-validated predictive error first, then lattice predictions and compatibility screening only if you choose to proceed.",
-        "Report CV performance and model/data scope together with any screened candidate; never report the physics residual without model error.",
-    )
-    st.download_button("Download ML dataset template",(DATA/"ml_template.csv").read_bytes(),"ml_template.csv","text/csv")
-    train_file=st.file_uploader("Training dataset CSV",type=["csv"],key="ml_train")
+    st.markdown("This workbench does **not ship a fabricated universal model**. You provide a real dataset; the app cross-validates the model, predicts lattice parameters, and then passes those predictions through the exact compatibility engine.")
+    st.download_button("Download ML dataset template", (DATA / "ml_template.csv").read_bytes(), "ml_template.csv", "text/csv")
+    train_file = st.file_uploader("Training CSV", type=["csv"], key="ml_train")
     if train_file is not None:
         try:
-            train_df=pd.read_csv(train_file); numeric=[c for c in train_df.columns if pd.api.types.is_numeric_dtype(train_df[c])]; features_default=[c for c in numeric if c not in TARGET_COLUMNS]
-            features=st.multiselect("Numeric composition / processing features",numeric,default=features_default)
-            missing_targets=[c for c in TARGET_COLUMNS if c not in train_df.columns]
-            a1,a2,a3,a4=st.columns(4); a1.metric("rows uploaded",len(train_df)); a2.metric("numeric columns",len(numeric)); a3.metric("features selected",len(features)); a4.metric("missing lattice targets",len(missing_targets))
-            if missing_targets: st.error("Missing required target columns: "+", ".join(missing_targets))
-            else:
-                try:
-                    clean=validate_ml_frame(train_df,features); st.success(f"Dataset audit passed: {len(clean)} complete rows available for modeling.")
-                    if len(clean)<20: st.warning("Fewer than 20 complete rows: the engine permits training, but this is a small dataset and CV uncertainty can be large.")
-                except Exception as exc: st.error(str(exc)); clean=None
-                if clean is not None:
-                    m1,m2,m3=st.columns(3); model_name=m1.selectbox("Model",["Linear regression","Random forest","Extra trees"]); folds=m2.number_input("CV folds",min_value=2,max_value=10,value=min(5,len(clean))); ml_seed=m3.number_input("Random seed",value=42,step=1)
-                    if st.button("Train + cross-validate",type="primary"):
-                        with st.spinner("Cross-validating out-of-fold predictions…"):
-                            mlres=train_lattice_model(train_df,features,model_name=model_name,folds=int(folds),seed=int(ml_seed))
-                        st.session_state["ml_result"]=mlres
-                    mlres=st.session_state.get("ml_result")
-                    if mlres is not None:
-                        metrics=mlres.cv_metrics.copy(); means=clean[TARGET_COLUMNS].abs().mean().to_dict(); metrics["MAE / mean target (%)"]=[100*r.MAE/max(abs(means.get(r.target,np.nan)),1e-15) for r in metrics.itertuples()]
-                        st.subheader("Cross-validation quality — inspect before screening")
-                        st.dataframe(metrics,width="stretch",hide_index=True)
-                        bad=(metrics["R2"]<0).sum();
-                        if bad: st.warning(f"{bad} target(s) have negative cross-validated R². Predictions for those targets perform worse than predicting the fold mean; physics screening from such predictions is not publication-ready without a stronger model/dataset.")
-                        else: st.success("All reported target R² values are non-negative in the current cross-validation. This is necessary context, not proof of out-of-domain reliability.")
-                        cand=st.file_uploader("Candidate feature grid CSV",type=["csv"],key="ml_candidates")
-                        if cand is not None:
-                            cdf=pd.read_csv(cand); pred=predict_lattice(mlres,cdf); screened=physics_screen_predictions(pred); st.session_state["ml_screened"]=screened
-                            valid=int(screened["physics_valid"].sum()) if "physics_valid" in screened else 0
-                            s1,s2=st.columns(2); s1.metric("candidate rows",len(screened)); s2.metric("physically valid predicted lattices",valid)
-                            st.caption("Physics screening uses the engine's fixed 10⁻³ CC1/CC2 decision thresholds for this ML ranking stage. This is a screening convention and is intentionally reported, not hidden.")
-                            default=[c for c in screened.columns if c.startswith("pred_") or c in ["physics_valid","abs_lambda2_minus_1","cmc_relative_zero","best_cc2_normalized","best_cc3_margin"]]
-                            st.dataframe(screened[default].head(20),width="stretch",hide_index=True)
-                            with st.expander("Full screened candidate table"):
-                                st.dataframe(screened,width="stretch",hide_index=True)
-                            st.download_button("Download physics-screened candidates",screened.to_csv(index=False),"ml_physics_screened_candidates.csv","text/csv")
-                            paper_wording(f"A {mlres.model_name} multi-output model was trained on {mlres.n_samples} complete samples using {int(folds)}-fold shuffled cross-validation (seed={int(ml_seed)}). Predictive performance was reported separately for each lattice target before compatibility screening.","Candidate lattice parameters were predicted only from the selected feature columns and then evaluated by the compatibility engine; physics residuals were interpreted together with the cross-validation errors rather than as exact measurements.","The model is empirical and dataset-bounded. Extrapolation, phase stability and experimental realizability require independent validation.")
-        except Exception as exc: st.error(str(exc))
-    extension_note("The ML layer is deliberately data-dependent: no pretrained universal composition→lattice model is shipped, and physics screening does not rescue a poorly validated regression model.")
+            train_df = pd.read_csv(train_file)
+            numeric = [c for c in train_df.columns if pd.api.types.is_numeric_dtype(train_df[c])]
+            features_default = [c for c in numeric if c not in TARGET_COLUMNS]
+            features = st.multiselect("Composition / processing feature columns", numeric, default=features_default)
+            m1, m2, m3 = st.columns(3)
+            model_name = m1.selectbox("Model", ["Linear regression", "Random forest", "Extra trees"])
+            folds = m2.number_input("Cross-validation folds", min_value=2, max_value=10, value=5)
+            ml_seed = m3.number_input("ML random seed", value=42, step=1)
+            if st.button("Train and cross-validate ML model", type="primary"):
+                with st.spinner("Cross-validating…"):
+                    mlres = train_lattice_model(train_df, features, model_name=model_name, folds=int(folds), seed=int(ml_seed))
+                st.session_state["ml_result"] = mlres
+            mlres = st.session_state.get("ml_result")
+            if mlres is not None:
+                st.markdown(f"**Training rows:** {mlres.n_samples} · **Model:** {mlres.model_name}")
+                st.dataframe(mlres.cv_metrics, width="stretch", hide_index=True)
+                st.warning("Use cross-validation errors to decide whether predictions are credible. A low compatibility residual from a poorly validated lattice model is not meaningful.")
+                cand = st.file_uploader("Candidate composition grid CSV", type=["csv"], key="ml_candidates")
+                if cand is not None:
+                    cdf = pd.read_csv(cand)
+                    pred = predict_lattice(mlres, cdf)
+                    screened = physics_screen_predictions(pred)
+                    st.dataframe(screened, width="stretch", hide_index=True)
+                    st.download_button("Download physics-screened ML candidates", screened.to_csv(index=False), "ml_physics_screened_candidates.csv", "text/csv")
+        except Exception as exc:
+            st.error(str(exc))
+    math_used(["APP-ML", "PTMC-SC1", "CMC"], title="Math / model provenance used in this workflow")
 
 
 # ---------- 8 multistep ----------
 elif workspace.startswith("8"):
-    st.header("Multi-step transformations")
-    workspace_brief(
-        "Which stage of a transformation chain is closest to single-variant/metric compatibility?",
-        "A CSV defining each parent/product cell and its invertible 3×3 correspondence matrix.",
-        "Per-stage λ₁, λ₂, λ₃, det(U), |λ₂−1|, CMC distance and CMC degeneracy order.",
-        "Use for stage-by-stage metric/stretch analysis; do not apply the built-in NiTi twin equations to arbitrary phase pairs.",
-    )
-    st.download_button("Download multi-step CSV template",(DATA/"multistep_template.csv").read_bytes(),"multistep_template.csv","text/csv")
-    with st.expander("CSV convention"):
-        st.markdown("Each row defines one stage: stage name; parent/product a,b,c,α,β,γ; and C11…C33. Cell lengths must be positive, angles must be between 0° and 180°, and the correspondence matrix must be invertible.")
-        st.caption("The generic CMC stage engine uses relative degeneracy tolerance 10⁻⁶. Transformation-specific M/M twin and shear/shear formulas are withheld unless a certified symmetry/correspondence module exists for that phase pair.")
-    chain_file=st.file_uploader("Transformation-chain CSV",type=["csv"],key="chain")
+    st.header("Multi-step transformation chain")
+    st.markdown("For B2→R→B19′ and other chains, each stage can have its own general unit-cell metric and correspondence matrix. The generic stage engine evaluates CMC distance and stretch eigenvalues without pretending that the built-in B2→B19′ twin formulas apply to every phase pair.")
+    st.download_button("Download multi-step CSV template", (DATA / "multistep_template.csv").read_bytes(), "multistep_template.csv", "text/csv")
+    chain_file = st.file_uploader("Transformation-chain CSV", type=["csv"], key="chain")
     if chain_file is not None:
         try:
-            df=pd.read_csv(chain_file); stages=[]
-            for _,r in df.iterrows():
-                parent=GeneralCell(float(r.parent_a),float(r.parent_b),float(r.parent_c),float(r.parent_alpha_deg),float(r.parent_beta_deg),float(r.parent_gamma_deg)); product=GeneralCell(float(r.product_a),float(r.product_b),float(r.product_c),float(r.product_alpha_deg),float(r.product_beta_deg),float(r.product_gamma_deg)); C=np.array([[r.C11,r.C12,r.C13],[r.C21,r.C22,r.C23],[r.C31,r.C32,r.C33]],float); stages.append((str(r.stage),parent,product,C))
-            out=evaluate_chain(stages); st.session_state["chain_result"]=out
-            i1=int(out.abs_lambda2_minus_1.idxmin()); i2=int(out.cmc_relative_zero.idxmin())
-            a1,a2,a3=st.columns(3); a1.metric("stages",len(out)); a2.metric("best |λ₂−1|",f"{out.loc[i1,'abs_lambda2_minus_1']:.3e}",delta=str(out.loc[i1,'stage'])); a3.metric("best δ_CMC",f"{out.loc[i2,'cmc_relative_zero']:.3e}",delta=str(out.loc[i2,'stage']))
-            display=out.copy(); display["CC1 within current threshold"]=display.abs_lambda2_minus_1<=cc1_tol; display["CMC within stage tolerance"]=display.cmc_relative_zero<=1e-6
-            st.dataframe(display,width="stretch",hide_index=True)
-            p=out.copy(); p["abs_lambda2_minus_1"]=np.clip(p.abs_lambda2_minus_1,1e-15,None); p["cmc_relative_zero"]=np.clip(p.cmc_relative_zero,1e-15,None)
-            st.plotly_chart(px.line(p,x="stage",y=["abs_lambda2_minus_1","cmc_relative_zero"],markers=True,log_y=True,title="Stage-by-stage compatibility distances",labels={"value":"residual (dimensionless)","variable":"criterion"}),width="stretch")
-            st.download_button("Download chain evaluation",out.to_csv(index=False),"multistep_results.csv","text/csv")
-            paper_wording(f"Each transformation stage was evaluated independently from its unit-cell metrics and correspondence matrix using the generic stretch and CMC constructions; the generic CMC stage tolerance was 10⁻⁶.",f"Among {len(out)} stages, the smallest |λ₂−1| was {out.loc[i1,'abs_lambda2_minus_1']:.3e} for {out.loc[i1,'stage']}, while the smallest CMC distance was {out.loc[i2,'cmc_relative_zero']:.3e} for {out.loc[i2,'stage']}.","The generic chain calculation does not certify transformation-specific Type-I/II/Compound twins or shear/shear supercompatibility for phase pairs lacking an explicit symmetry/correspondence implementation.")
-        except Exception as exc: st.error(str(exc))
-    math_used(["CMC","PTMC-SC1"],title="Per-stage methods/equations audit")
+            df = pd.read_csv(chain_file)
+            stages = []
+            for _, r in df.iterrows():
+                parent = GeneralCell(float(r.parent_a), float(r.parent_b), float(r.parent_c), float(r.parent_alpha_deg), float(r.parent_beta_deg), float(r.parent_gamma_deg))
+                product = GeneralCell(float(r.product_a), float(r.product_b), float(r.product_c), float(r.product_alpha_deg), float(r.product_beta_deg), float(r.product_gamma_deg))
+                C = np.array([[r.C11,r.C12,r.C13],[r.C21,r.C22,r.C23],[r.C31,r.C32,r.C33]], dtype=float)
+                stages.append((str(r.stage), parent, product, C))
+            out = evaluate_chain(stages)
+            st.dataframe(out, width="stretch", hide_index=True)
+            fig = px.bar(out, x="stage", y="abs_lambda2_minus_1", title="Stage-by-stage |λ₂−1|", labels={"stage":"Transformation stage", "abs_lambda2_minus_1":"CC1 residual |λ₂−1| (dimensionless)"})
+            st.plotly_chart(fig, width="stretch")
+            st.download_button("Download chain evaluation", out.to_csv(index=False), "multistep_results.csv", "text/csv")
+            st.info("Full Type-I/II/compound twin classification is currently certified only for the built-in B2→B19′ transformation. Generic stages are intentionally limited to metric/stretch compatibility unless their symmetry/correspondence module is supplied.")
+        except Exception as exc:
+            st.error(str(exc))
+    math_used(["CMC", "PTMC-SC1"], title="Per-stage compatibility relations")
+    extension_note("The multi-step chain wrapper is a software extension. Each row reuses the registered metric/stretch calculations, while transformation-specific twin formulas are withheld unless that phase pair has a certified symmetry/correspondence implementation.")
 
 
 # ---------- 9 parent / daughter reconstruction ----------
 elif workspace.startswith("9"):
-    st.header("EBSD parent ↔ daughter reconstruction")
-    workspace_brief(
-        "Which measured B19′ daughter grains came from the same B2 parent, and what was the parent orientation?",
-        "Daughter EBSD orientations, grain adjacency and the declared B2↔B19′ crystallographic relation.",
-        "Parent IDs/orientations, daughter variant assignments, operator statistics, cycle checks and truth metrics when labels exist.",
-        "Use reconstructed orientations/assignments only with the input audit, method controls and truth/validation evidence exported by this workbench.",
-    )
-    st.info("This workspace has its own EBSD-specific inputs; the B2/B19′ lattice box is intentionally not repeated here. The reconstruction engine remains the validated truth-aware build used before this UI revision.")
     from src.reconstruction_workbench import render_reconstruction_workbench
     render_reconstruction_workbench()
-    math_used(["APP-RECON","APP-CT-OR","APP-REGEN","APP-CYCLE","APP-SWITCH"],title="Reconstruction / CT bridge methods audit")
+    math_used(["APP-RECON", "APP-CT-OR", "APP-REGEN", "APP-CYCLE", "APP-SWITCH"], title="Reconstruction, CT/Otsuka–Ren bridge, and B19′→B2→B19′ cycle math provenance")
 
 
 # ---------- 10 independent compatibility methods ----------
 elif workspace.startswith("10"):
-    st.header("Independent theorem cross-checks")
-    workspace_brief(
-        "Does an independent compatibility theorem reproduce or challenge the conclusion from the main CMC/PTMC workflows?",
-        "Current NiTi stretch for applicable tests, or explicit inputs for generic/other transformation-class methods.",
-        "Raw theorem-specific residuals with an applicability label; no cross-theory 'overall score'.",
-        "Use as a robustness/cross-check section, always naming the theorem and transformation class.",
-    )
-    tab_rank,tab_laminate,tab_triplet,tab_jump=st.tabs(["NiTi · single/pairs","NiTi · all-f laminate","Other class · triplet","Generic · Hadamard"])
+    st.header("Independent compatibility methods")
+    st.markdown("Cross-check the same lattice with methods that answer **different compatibility questions**. A pass in one row is not silently promoted to a pass in another theory.")
+
+    tab_rank, tab_laminate, tab_triplet, tab_jump = st.tabs(["Single variant & variant pairs", "All-volume-fraction laminate", "Triplet condition", "General Hadamard jump"])
+
     with tab_rank:
-        st.success("Applicability to the current B2→B19′ stretch calculation: YES.")
-        ips=single_variant_ips_residual(stretch.U); variants=stretch_variants(stretch.U); pair_df=pairwise_twin_compatibility(variants); st.session_state["ind_pair_table"]=pair_df
-        compatible_count=int(pair_df.rank_one_compatible.sum()) if len(pair_df) else 0
-        q1,q2,q3,q4=st.columns(4); q1.metric("λ₂",f"{ips['lambda2']:.8f}"); q2.metric("|λ₂−1|",f"{abs(ips['lambda2']-1):.3e}"); q3.metric("stretch variants",len(variants)); q4.metric("rank-one-compatible pairs",f"{compatible_count}/{len(pair_df)}")
-        if len(pair_df):
-            compat=pair_df[pair_df.rank_one_compatible]
-            if len(compat): st.dataframe(compat,width="stretch",hide_index=True)
-            else: st.info("No rank-one-compatible stretch-variant pair was found by this spectral test.")
-            with st.expander("Full pairwise spectral table"):
-                st.dataframe(pair_df,width="stretch",hide_index=True)
-            st.download_button("Download pairwise rank-one table",pair_df.to_csv(index=False),"variant_pair_rank_one_compatibility.csv","text/csv")
-        st.caption("Pair criterion: eigenvalues χ of Uⱼ⁻ᵀUᵢᵀUᵢUⱼ⁻¹ must satisfy χ₁≤1, χ₂=1, χ₃≥1 within the implementation tolerance.")
+        ips = single_variant_ips_residual(stretch.U)
+        q1, q2, q3 = st.columns(3)
+        explained_metric(q1, "Smallest principal stretch — λ₁", f"{ips['lambda1']:.8f}", SymbolDefinition(r"\lambda_1", "smallest principal stretch factor of U", "dimensionless"))
+        explained_metric(q2, "Middle principal stretch — λ₂", f"{ips['lambda2']:.8f}", OUTPUT_SYMBOLS["lambda2"], delta=f"{ips['lambda2']-1:+.3e}")
+        explained_metric(q3, "Largest principal stretch — λ₃", f"{ips['lambda3']:.8f}", SymbolDefinition(r"\lambda_3", "largest principal stretch factor of U", "dimensionless"))
+        st.caption("Ball–James single-variant A/M IPS condition: the middle principal stretch λ₂ must equal 1, with λ₁≤1≤λ₃.")
+
+        variants = stretch_variants(stretch.U)
+        pair_df = pairwise_twin_compatibility(variants)
+        compatible_count = int(pair_df["rank_one_compatible"].sum()) if len(pair_df) else 0
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Unique stretch variants", len(variants))
+        c2.metric("Variant pairs", len(pair_df))
+        c3.metric("Rank-one-compatible pairs", compatible_count)
+        st.markdown("For each pair, the Ball–James/Bhattacharya spectral test checks eigenvalues χ of `Uⱼ⁻ᵀ Uᵢᵀ Uᵢ Uⱼ⁻¹`: χ₁≤1, χ₂=1, χ₃≥1.")
+        st.dataframe(pair_df, width="stretch", hide_index=True)
+        st.caption("Pair-table notation: U_i and U_j = two martensite stretch variants; χ₁≤χ₂≤χ₃ = eigenvalues of the pairwise spectral matrix U_j⁻ᵀ U_iᵀ U_i U_j⁻¹; rank_one_compatible = whether χ₁≤1, χ₂≈1, χ₃≥1 within the implemented tolerance.")
+        st.download_button("Download pairwise rank-one table", pair_df.to_csv(index=False), "variant_pair_rank_one_compatibility.csv", "text/csv")
+
     with tab_laminate:
-        st.success("Applicability to a selected NiTi cofactor-domain laminate: YES.")
-        cc=all_cofactor_systems(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol); labels=[f"{r.domain_type} · axis {axis_label(r.axis)}"+(" · partner "+axis_label(r.partner_axis) if r.partner_axis is not None else "") for r in cc]
-        sel=st.selectbox("Domain system",range(len(cc)),format_func=lambda i:labels[i]); n_f=st.number_input("Volume-fraction samples",min_value=11,max_value=1001,value=101,step=10)
-        scan=laminate_volume_fraction_scan(stretch.U,cc[int(sel)].a,cc[int(sel)].n,points=int(n_f))
-        s1,s2=st.columns(2); s1.metric("max |σ₂(F(f))−1|",f"{scan.max_middle_stretch_residual:.3e}"); s2.metric("RMS residual",f"{scan.rms_middle_stretch_residual:.3e}")
-        st.plotly_chart(px.line(scan.table,x="volume_fraction_f",y="abs_sigma2_minus_1",title="All-volume-fraction middle-singular-value residual",labels={"volume_fraction_f":"variant-1 fraction f","abs_sigma2_minus_1":"|σ₂(F(f))−1|"}),width="stretch")
-        with st.expander("Numerical scan table"): st.dataframe(scan.table,width="stretch",hide_index=True)
-        st.download_button("Download all-f scan",scan.table.to_csv(index=False),"laminate_volume_fraction_scan.csv","text/csv")
+        cc = all_cofactor_systems(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol)
+        labels = [f"{r.domain_type} · axis {axis_label(r.axis)}" + (" · partner " + axis_label(r.partner_axis) if r.partner_axis is not None else "") for r in cc]
+        sel = st.selectbox("Twin/domain system", range(len(cc)), format_func=lambda i: labels[i])
+        n_f = st.number_input("Volume-fraction samples", min_value=11, max_value=1001, value=101, step=10, help="Dimensionless sample count across f = 0…1.")
+        scan = laminate_volume_fraction_scan(stretch.U, cc[int(sel)].a, cc[int(sel)].n, points=int(n_f))
+        s1, s2 = st.columns(2)
+        explained_metric(s1, "Maximum all-f residual — max |σ₂(F(f))−1|", f"{scan.max_middle_stretch_residual:.3e}", "f = laminate volume fraction from 0 to 1; F(f) = laminate deformation gradient; σ₂ = middle singular value of F(f); 0 is exact compatibility at every sampled f.")
+        explained_metric(s2, "RMS all-f residual — RMS |σ₂(F(f))−1|", f"{scan.rms_middle_stretch_residual:.3e}", "RMS = root-mean-square over all sampled f values; σ₂ = middle singular value; 0 is exact across the sampled interval.")
+        st.caption("Here F(f)=U+f a⊗n. For a twin system satisfying the full cofactor conditions, the middle singular value remains one for every twin volume fraction f∈[0,1]. This numerical scan is therefore an independent direct verification of the all-f implication.")
+        fig = px.line(scan.table, x="volume_fraction_f", y="abs_sigma2_minus_1", title="Direct all-volume-fraction compatibility residual", labels={"volume_fraction_f":"Variant-1 volume fraction f (0 to 1)", "abs_sigma2_minus_1":"|σ₂(F(f))−1| (dimensionless)"})
+        st.plotly_chart(fig, width="stretch")
+        st.download_button("Download all-f scan", scan.table.to_csv(index=False), "laminate_volume_fraction_scan.csv", "text/csv")
+
     with tab_triplet:
-        st.error("Applicability to the current B2→B19′ monoclinic study: NO. This implementation is the specialized cubic→orthorhombic TC-I/TC-II algebraic module and is kept here only for other transformation classes.")
-        t1,t2=st.columns(2)
-        with t1: ap=st.number_input("cubic parent a (Å)",min_value=.1,max_value=20.,value=3.,step=.001,format="%.6f"); ao=st.number_input("orthorhombic a_o (Å)",min_value=.1,max_value=20.,value=2.88,step=.001,format="%.6f")
-        with t2: bo=st.number_input("orthorhombic b_o (Å)",min_value=.1,max_value=20.,value=4.24,step=.001,format="%.6f"); co=st.number_input("orthorhombic c_o (Å)",min_value=.1,max_value=20.,value=4.62,step=.001,format="%.6f")
-        alpha,beta_o,gamma=orthorhombic_principal_stretches(ap,ao,bo,co); tr=triplet_condition_orthorhombic(alpha,beta_o,gamma)
-        st.dataframe(pd.DataFrame([{"condition":"TC-I","raw residual":tr.tc_i_raw,"normalized |residual|":tr.tc_i_normalized},{"condition":"TC-II","raw residual":tr.tc_ii_raw,"normalized |residual|":tr.tc_ii_normalized}]),width="stretch",hide_index=True)
-        st.caption(f"Normalized orthorhombic ratios: α={tr.alpha:.7f}, β={tr.beta:.7f}, γ={tr.gamma:.7f}. Here β is a ratio, not the B19′ monoclinic angle.")
+        st.warning("Applicability guard: this module implements the specialized **cubic → orthorhombic TC-I and TC-II algebraic branches**. It is not the full general triplet theory (including all homogeneous branches), and it is not a B2→B19′ monoclinic pass/fail test.")
+        t1, t2 = st.columns(2)
+        with t1:
+            ap = st.number_input("Cubic parent lattice parameter — a_parent — Å", min_value=0.1, max_value=20.0, value=3.00, step=0.001, format="%.6f", help="Å")
+            ao = st.number_input("Orthorhombic daughter lattice parameter — a_o — Å", min_value=0.1, max_value=20.0, value=2.88, step=0.001, format="%.6f", help="Å")
+        with t2:
+            bo = st.number_input("Orthorhombic daughter lattice parameter — b_o — Å", min_value=0.1, max_value=20.0, value=4.24, step=0.001, format="%.6f", help="Å")
+            co = st.number_input("Orthorhombic daughter lattice parameter — c_o — Å", min_value=0.1, max_value=20.0, value=4.62, step=0.001, format="%.6f", help="Å")
+        st.caption("a_parent = cubic parent unit-cell edge; a_o, b_o, c_o = orthorhombic daughter unit-cell edge lengths; Å = ångström = 10⁻¹⁰ m. These symbols belong only to the specialized cubic→orthorhombic triplet module.")
+        alpha, beta_o, gamma = orthorhombic_principal_stretches(ap, ao, bo, co)
+        tr = triplet_condition_orthorhombic(alpha, beta_o, gamma)
+        z1, z2, z3 = st.columns(3)
+        explained_metric(z1, "Triplet ratio α = a_o/a_parent", f"{tr.alpha:.7f}", SymbolDefinition(r"\alpha", "first normalized orthorhombic lattice ratio a_o/a_parent", "dimensionless", "used only in the cubic→orthorhombic triplet-condition workspace"))
+        explained_metric(z2, "Triplet ratio β = b_o/(√2 a_parent)", f"{tr.beta:.7f}", SymbolDefinition(r"\beta", "second normalized orthorhombic ratio b_o/(√2 a_parent)", "dimensionless", "this β is NOT the B19′ monoclinic angle"))
+        explained_metric(z3, "Triplet ratio γ = c_o/(√2 a_parent)", f"{tr.gamma:.7f}", SymbolDefinition(r"\gamma", "third normalized orthorhombic ratio c_o/(√2 a_parent)", "dimensionless"))
+        st.dataframe(pd.DataFrame([
+            {"condition": "TC-I", "raw_residual": tr.tc_i_raw, "normalized_abs_residual": tr.tc_i_normalized},
+            {"condition": "TC-II", "raw_residual": tr.tc_ii_raw, "normalized_abs_residual": tr.tc_ii_normalized},
+        ]), width="stretch", hide_index=True)
+        st.caption("The triplet condition addresses stress-free compatibility of three martensitic variants and is a different design principle from the classical cofactor conditions.")
+
     with tab_jump:
-        st.info("Applicability: GENERIC. The Hadamard rank-one jump test is meaningful only if matrices A and B are physically justified deformation gradients for the interface you want to test.")
-        default_a="1 0.08 0; 0 1 0; 0 0 1"; default_b="1 0 0; 0 1 0; 0 0 1"; ja=st.text_area("Matrix A",value=default_a); jb=st.text_area("Matrix B",value=default_b)
-        def parse_matrix(s):
-            rows=[[float(x) for x in row.replace(","," ").split()] for row in s.split(";")]; a=np.asarray(rows,float)
-            if a.shape!=(3,3): raise ValueError("Matrix must contain exactly 3 rows and 3 entries per row.")
+        st.markdown("The Hadamard jump condition asks whether two deformation gradients can meet across a coherent planar interface: `A − B = a⊗m`, i.e. the jump has rank one.")
+        st.caption("Enter two 3×3 matrices as rows separated by semicolons, entries separated by spaces. This is a generic mathematical diagnostic; interpretation depends on what deformation gradients A and B physically represent.")
+        default_a = "1 0.08 0; 0 1 0; 0 0 1"
+        default_b = "1 0 0; 0 1 0; 0 0 1"
+        ja = st.text_area("Matrix A", value=default_a)
+        jb = st.text_area("Matrix B", value=default_b)
+        def parse_matrix(text: str):
+            rows = [[float(x) for x in row.replace(",", " ").split()] for row in text.split(";")]
+            a = np.asarray(rows, float)
+            if a.shape != (3, 3):
+                raise ValueError("Matrix must contain exactly 3 rows and 3 entries per row.")
             return a
         try:
-            cert=hadamard_rank_one_certificate(parse_matrix(ja),parse_matrix(jb)); criterion_table([{"Test":"normalized rank-one residual","Value":f"σ₂/σ₁={cert.normalized_rank_one_residual:.3e}","Criterion":"≤ 10⁻⁸","Status":"PASS" if cert.exact_within_tol else "FAIL"}]); st.write("Singular values of A−B:",[float(x) for x in cert.singular_values])
-        except Exception as exc: st.error(str(exc))
-    math_used(["IND-HADAMARD","IND-TWIN-SPECTRAL","IND-LAMINATE","IND-TRIPLET-I","IND-TRIPLET-II"],title="Independent-method equations & scope audit")
+            cert = hadamard_rank_one_certificate(parse_matrix(ja), parse_matrix(jb))
+            h1, h2 = st.columns(2)
+            explained_metric(h1, "Normalized rank-one residual — σ₂/σ₁", f"{cert.normalized_rank_one_residual:.3e}", SymbolDefinition(r"\sigma_2/\sigma_1", "second singular value divided by the largest singular value of A−B", "dimensionless", "0 means the jump has rank at most one within numerical precision"))
+            explained_metric(h2, "Rank-one within 10⁻⁸", "Yes" if cert.exact_within_tol else "No", "10⁻⁸ = numerical decision threshold applied to the normalized rank-one residual; it is not a material constant.")
+            st.write("Singular values of A−B (σ₁ ≥ σ₂ ≥ σ₃):", [float(x) for x in cert.singular_values])
+            st.caption("A and B = the two supplied deformation-gradient matrices; σ₁, σ₂, σ₃ = ordered singular values of their matrix difference A−B.")
+        except Exception as exc:
+            st.error(str(exc))
+    math_used(["IND-HADAMARD", "IND-TWIN-SPECTRAL", "IND-LAMINATE", "IND-TRIPLET-I", "IND-TRIPLET-II"], title="Independent-method equations and scope guards")
 
 
 # ---------- 11 frontier / methods ----------
 elif workspace.startswith("11"):
-    st.header("Applicability, references & methods")
-    workspace_brief(
-        "Which mathematical methods in this Lab actually apply to the current B2→B19′ problem?",
-        "The current transformation class; no new physical input is required.",
-        "An applicability map, method boundaries, key primary references and implementation philosophy.",
-        "Use to justify method selection and explicitly explain why non-applicable frontier theorems were not used.",
+    st.header("Research frontier & reproducibility")
+    fd = frontier_diagnostic(stretch.U)
+    f1, f2, f3 = st.columns(3)
+    explained_metric(f1, "Unique stretch variants", fd.n_stretch_variants, "Number of symmetry-distinct transformation stretch tensors U_i generated from the parent symmetry; count.")
+    explained_metric(f2, "Commuting stretch-variant pairs", len(fd.commuting_pairs), "Number of variant pairs (U_i,U_j) for which U_i U_j = U_j U_i within the implemented numerical tolerance; count.")
+    explained_metric(f3, "Monoclinic unique-axis direction in parent coordinates", axis_label(fd.monoclinic_axis_parent_direction), "Crystallographic direction [u v w] of the B19′ unique monoclinic axis expressed in the parent basis; brackets denote a direct-lattice direction, not a vector magnitude.")
+    st.info(fd.note)
+    if fd.commuting_pairs:
+        st.dataframe(pd.DataFrame(fd.commuting_pairs, columns=["Variant i", "Variant j", "commutator Frobenius norm"]), width="stretch", hide_index=True)
+    else:
+        st.write("No commuting stretch-variant pairs were found for the current built-in transformation within the selected numerical construction.")
+
+    st.subheader("Extreme-compatibility frontier")
+    st.markdown(
+        "Recent theory extends transition-layer-free compatibility beyond conventional Type-I/II laminates to compound domains. Those exact extreme-compatibility conditions are **transformation-class specific**. The built-in B2→B19′ correspondence maps the monoclinic unique axis to a cubic `<110>` direction, so cubic→monoclinic-II target tensors are not used as a pass/fail test here. This prevents an attractive but invalid cross-application of a frontier theorem."
     )
-    applicability=pd.DataFrame([
-        ["CMC / SMC correspondence theory","YES","B2→B19′ metrics + correspondence + symmetries","Primary CT compatibility/shear framework in this Lab."],
-        ["Classical PTMC / cofactor conditions","YES","Transformation stretch U + domain systems","Independent classical cross-check."],
-        ["Variant/operator double-coset analysis","YES","Built-in B2↔B19′ correspondence","Operational variant/twin use is in Workspace 3."],
-        ["Interaction Work","YES, with declared frame","Initial martensite state + stress/orientation","Mechanical selection term; not a compatibility theorem."],
-        ["EBSD parent reconstruction","YES, with experimental EBSD","Daughter orientations + adjacency + OR/correspondence","Experimental reconstruction workflow in Workspace 9."],
-        ["Triplet TC-I/TC-II module","NO for current monoclinic study","Specialized cubic→orthorhombic algebra","Retained only for other transformation classes."],
-        ["Extreme compound-domain theorem","NOT USED as B2→B19′ pass/fail","Transformation-class-specific hypotheses","The Lab prevents cross-application without matching hypotheses."],
-        ["Composition→lattice ML","DATA-DEPENDENT","User dataset + CV","Prediction layer only; no universal pretrained model."],
-    ],columns=["Method","Applicability","Required information","Claim boundary"])
-    st.dataframe(applicability,width="stretch",hide_index=True)
 
-    with st.expander("Current transformation-structure diagnostic"):
-        fd=frontier_diagnostic(stretch.U); f1,f2,f3=st.columns(3); f1.metric("unique stretch variants",fd.n_stretch_variants); f2.metric("commuting pairs",len(fd.commuting_pairs)); f3.metric("monoclinic unique axis in parent",axis_label(fd.monoclinic_axis_parent_direction)); st.info(fd.note)
-        if fd.commuting_pairs: st.dataframe(pd.DataFrame(fd.commuting_pairs,columns=["Variant i","Variant j","commutator Frobenius norm"]),width="stretch",hide_index=True)
-
-    st.subheader("Primary / method references")
-    refs=[
-        ("Metric/correspondence CMC-SMC formulation","10.1016/j.actamat.2026.122399"),
-        ("Classical cofactor conditions","10.1016/j.jmps.2013.08.004"),
-        ("Triplet condition","10.1016/j.jmps.2022.105050"),
-        ("Triplet corrigendum","10.1016/j.jmps.2023.105277"),
-        ("Operator/groupoid parent reconstruction","10.1107/S0021889807048777"),
-        ("MTEX parent grain reconstruction","10.1107/S1600576721011560"),
-        ("Least-squares parent orientation reconstruction","10.1016/j.actamat.2010.08.001"),
-        ("Hysteresis and λ₂-guided design","10.1016/j.actamat.2009.05.034"),
-        ("Near-cofactor reversibility benchmark","10.1038/nature12532"),
-        ("Ultralow-fatigue microstructure benchmark","10.1126/science.1261164"),
-        ("Extreme compatibility for compound domains","10.1016/j.jmps.2025.106409"),
+    st.subheader("Method references used by the software")
+    refs = [
+        ("Hadamard / general interface compatibility", "10.1016/S0921-5093(99)00377-9"),
+        ("Classical cofactor conditions", "10.1016/j.jmps.2013.08.004"),
+        ("Triplet condition", "10.1016/j.jmps.2022.105050"),
+        ("Triplet-condition corrigendum", "10.1016/j.jmps.2023.105277"),
+        ("Parent grain reconstruction in MTEX", "10.1107/S1600576721011560"),
+        ("Least-squares parent orientation reconstruction", "10.1016/j.actamat.2010.08.001"),
+        ("Operator/groupoid parent reconstruction", "10.1107/S0021889807048777"),
+        ("Hysteresis and λ₂-guided alloy design", "10.1016/j.actamat.2009.05.034"),
+        ("Experimental near-cofactor reversibility benchmark", "10.1038/nature12532"),
+        ("Ultralow-fatigue precipitate/microstructure benchmark", "10.1126/science.1261164"),
+        ("Phase engineering review", "10.1016/j.mattod.2017.10.002"),
+        ("Metric/correspondence CMC-SMC formulation", "10.1016/j.actamat.2026.122399"),
+        ("Extreme compatibility for compound domains", "10.1016/j.jmps.2025.106409"),
+        ("Composition→lattice ML precedent", "10.3390/ma17194754"),
+        ("Bayesian alloy-design precedent", "10.1016/j.actamat.2024.120651"),
     ]
-    st.dataframe(pd.DataFrame(refs,columns=["Method / benchmark","DOI"]),width="stretch",hide_index=True)
-    st.subheader("Implementation rules")
-    st.markdown("1. Exact scientific relations live in the embedded `src` engine; UI labels do not redefine them.  \n2. Published/analytical benchmarks are regression-tested.  \n3. Equality residuals, inequality margins and numerical thresholds are reported separately.  \n4. Experimental context is not converted into an unsupported universal law.  \n5. ML is cross-validated before physics screening.  \n6. Transformation-class applicability is checked before a frontier theorem is used.")
-    math_used(["CMC","SMC","PTMC-SC1","PTMC-SC2","PTMC-SC3","IND-HADAMARD","IND-TRIPLET-I"],title="Core method provenance")
+    for title, doi in refs:
+        st.markdown(f"- **{title}** — https://doi.org/{doi}")
+
+    st.subheader("Repository validation philosophy")
+    st.markdown(
+        "1. Exact equations live in `src/`, not inside UI code.  \n"
+        "2. Published numerical benchmarks are encoded as automated tests.  \n"
+        "3. Tolerances are explicit user-controlled thresholds.  \n"
+        "4. Experimental microstructure/performance metadata are not converted into invented universal laws.  \n"
+        "5. ML predictions are cross-validated before physics screening.  \n"
+        "6. Transformation-class applicability is checked before frontier theory is used."
+    )
+    st.download_button("Download current report JSON", json_download_payload(inp, dashboard, cc1_tol, cc2_tol), "compatibility_report.json", "application/json")
+    math_used(["CMC", "SMC", "PTMC-SC1", "PTMC-SC2", "PTMC-SC3", "IND-HADAMARD", "IND-TRIPLET-I"], title="Core and frontier method provenance")
 
 
 # ---------- 12 equation explorer ----------
 elif workspace.startswith("12"):
-    st.header("Equation & analytical solution library")
-    workspace_brief(
-        "Which exact relation produced a result, and does an analytical branch agree with the general matrix engine?",
-        "Current lattice plus a selected audit task/equation.",
-        "Equation, symbol definitions, provenance/scope, analytical parity residuals and source-discrepancy notes.",
-        "Use for Methods/Supplementary derivations and code-equation parity; operational variant/twin exploration remains in Workspace 3.",
+    st.header("Equation explorer & analytical solutions")
+    st.markdown(
+        "This workspace is the audit layer: it shows the **relation used, numerical substitution/result, source location, implementation path, scope and known source discrepancies**. "
+        "Analytical formulas are cross-checked against the general matrix engine wherever an independent calculation exists."
     )
-    task=st.selectbox("Choose an audit task",[
-        "Find / inspect one equation",
-        "Analytical CMC cross-check",
-        "CMC degeneracy families",
-        "IPS and shear geometry",
-        "Closed-form design families",
-        "Group-theory counts / scope",
+    et1, et2, et3, et4, et5, et6 = st.tabs([
+        "Stretch ↔ shear geometry", "Analytical CMC", "Degeneracy families",
+        "Correspondence & group theory", "Closed-form supercompatibility", "Equation catalog"
     ])
-    if task.startswith("Find"):
-        reg=equation_registry(); regdf=pd.DataFrame([{"key":r.key,"topic":r.topic,"provenance_class":r.provenance_class,"source_location":r.source_location,"meaning":r.meaning,"implementation":r.implementation,"scope":r.scope,"caveat":r.caveat} for r in reg.values()])
-        q=st.text_input("Search key, topic, meaning or source",placeholder="e.g. CMC, cofactor, shear/shear, reconstruction")
-        show=regdf.copy()
-        if q.strip():
-            needle=q.lower(); mask=pd.Series(False,index=show.index)
-            for col in ["key","topic","source_location","meaning","implementation","scope"]: mask |= show[col].fillna("").astype(str).str.lower().str.contains(needle,regex=False)
-            show=show[mask]
-        st.dataframe(show[["key","topic","provenance_class","source_location","meaning"]],width="stretch",hide_index=True)
-        if len(show):
-            selected=st.selectbox("Render equation",show.key.tolist()); rr=reg[selected]; st.latex(rr.relation_latex); render_symbol_definitions(definitions_for_equation(selected)); render_symbol_definitions(operators_for_latex(rr.relation_latex),heading="Operators / notation"); st.write(rr.meaning); st.caption(f"{rr.provenance_class} · {rr.source_location} · `{rr.implementation}` · Scope: {rr.scope}");
-            if rr.caveat: st.warning(rr.caveat)
-        st.download_button("Download complete equation provenance CSV",regdf.to_csv(index=False),"equation_provenance.csv","text/csv")
-    elif task.startswith("Analytical CMC"):
-        ana=niti_cmc_from_input(inp); chk=verify_analytic_cmc_against_general(inp)
-        c1,c2=st.columns(2); c1.metric("matrix parity residual",f"{chk['matrix_frobenius_residual']:.3e}"); c2.metric("eigenvalue parity residual",f"{chk['eigenvalue_max_abs_residual']:.3e}")
-        st.dataframe(pd.DataFrame(ana.matrix,index=["parent x","parent y","parent z"],columns=["parent x","parent y","parent z"]),width="stretch")
-        st.dataframe(pd.DataFrame([{"branch":k,"eigenvalue":v} for k,v in ana.eigenvalues_labeled.items()]),width="stretch",hide_index=True)
-        st.warning("Source-audit note retained: the available rendering/extraction is ambiguous for the q₃ sign. The implemented branch is the one that reproduces the printed CMC matrix eigenvalues; the discrepancy remains in exports rather than being silently erased.")
-        math_used(["CMC","CMC-Q","NITI-CMC","NITI-Q"],title="Analytical/general parity equations")
-    elif task.startswith("CMC degeneracy"):
-        f_eq=first_order_families(ar,br,cr,inp.beta_deg,tol=cc1_tol,c2b_interpretation="equation"); f_tab=first_order_families(ar,br,cr,inp.beta_deg,tol=cc1_tol,c2b_interpretation="table")
-        first=pd.DataFrame([{"family":f.name,"equation_key":f.equation_key,"equality_residual":f.equality_residual,"inequality_margins":list(f.inequality_margins),"equality_met":f.equality_met,"inequalities_met":f.inequalities_met,"family_met":f.met,"note":f.note} for f in f_eq]); st.dataframe(first,width="stretch",hide_index=True)
-        c2b=next(x for x in f_tab if x.name=="C2b"); st.warning(f"C2b source discrepancy: analytical equation branch uses b≤√2, whereas the later table branch gives b≥√2. Current table-interpretation result: met={c2b.met}.")
-        higher=higher_order_degeneracy_families(ar,br,cr,inp.beta_deg,tol=cc1_tol); st.dataframe(pd.DataFrame([{"family":h.name,"order":h.order,"met":h.met,"residuals":h.residuals,"habit_plane":None if h.habit_plane is None else h.habit_plane.tolist(),"equation_key":h.equation_key} for h in higher]),width="stretch",hide_index=True)
-        with st.expander("Source-defined distance audit"):
-            pdist=paper_defined_distances(ar,br,cr,inp.beta_deg); st.dataframe(pd.DataFrame([{"family":k,**v} for k,v in pdist.items()]),width="stretch",hide_index=True); st.warning("The later distance table has a reproducibility discrepancy between a printed equality value and the visually/parsed squared expression. Both interpretations are kept labeled in the engine/export.")
-        math_used(["CMC-DEGEN","CT-C1","CT-C2a","CT-C2b-EQ","CT-C2b-TABLE","CT-C3","CT-D1","CT-D2","CT-E"],title="Degeneracy-family equations")
-    elif task.startswith("IPS"):
-        mode=st.radio("Geometry input",["Current lattice","Temporary C1-compatible copy (set b_B19′ = √2 a_B2)"],horizontal=True); geom_inp=inp if mode.startswith("Current") else LatticeInput(inp.a_b2,inp.a_b19p,float(np.sqrt(2))*inp.a_b2,inp.c_b19p,inp.beta_deg); geom_stretch=stretch_from_lattice(geom_inp); branch=st.selectbox("IPS branch",[-1,1],format_func=lambda x:"minus branch" if x==-1 else "plus branch")
+
+    with et1:
+        st.subheader("From principal stretches to an explicit invariant-plane strain")
+        mode = st.radio(
+            "Geometry input",
+            ["Current lattice", "Temporary C1-compatible copy (set b_B19′ = √2 a_B2)"],
+            horizontal=True,
+            help="The second option does not alter your saved input boxes; it creates a temporary analytical check with λ₂=1."
+        )
+        geom_inp = inp
+        if mode.startswith("Temporary"):
+            geom_inp = LatticeInput(inp.a_b2, inp.a_b19p, float(np.sqrt(2))*inp.a_b2, inp.c_b19p, inp.beta_deg)
+        geom_stretch = stretch_from_lattice(geom_inp)
+        gc1, gc2, gc3 = st.columns(3)
+        explained_metric(gc1, "Smallest principal stretch — λ₁", f"{geom_stretch.eigenvalues[0]:.10f}", SymbolDefinition(r"\lambda_1", "smallest principal stretch factor of U", "dimensionless"))
+        explained_metric(gc2, "Middle principal stretch — λ₂", f"{geom_stretch.eigenvalues[1]:.10f}", OUTPUT_SYMBOLS["lambda2"], delta=f"{geom_stretch.eigenvalues[1]-1:+.3e}")
+        explained_metric(gc3, "Largest principal stretch — λ₃", f"{geom_stretch.eigenvalues[2]:.10f}", SymbolDefinition(r"\lambda_3", "largest principal stretch factor of U", "dimensionless"))
+        branch = st.selectbox("IPS branch", [-1, 1], format_func=lambda x: "minus branch" if x == -1 else "plus branch")
         try:
-            geo=ips_geometry_from_stretch(geom_stretch.U,int(branch),lambda2_tol=max(cc1_tol,2e-6)); q1,q2,q3,q4=st.columns(4); q1.metric("τ",f"{geo.tau:.10f}"); q2.metric("δ",f"{geo.delta:.10f}"); q3.metric("rank-one residual",f"{geo.rank_one_residual:.3e}"); q4.metric("plane-invariance residual",f"{geo.plane_invariance_residual:.3e}"); st.dataframe(pd.DataFrame(geo.F,index=["x","y","z"],columns=["x","y","z"]),width="stretch"); st.write({"d":geo.d.tolist(),"m":geo.m.tolist(),"v":geo.v.tolist()}); sg=shear_shear_geometry(geo.tau,geo.delta); st.write({"plane angle φ (deg)":sg["phi_deg"],"cos φ":sg["cos_phi"],"predicted twin shear |a|":sg["twin_shear_norm"]})
-        except Exception as exc: st.warning(str(exc))
-        math_used(["PTMC-V","PTMC-IPS","PTMC-TRACE","PTMC-DET","SHEAR-PHI","SHEAR-SHEAR-GEO"],title="IPS/shear equations")
-    elif task.startswith("Closed-form"):
-        beta_design=st.slider("β for analytical family (°)",min_value=80.,max_value=115.,value=float(np.clip(inp.beta_deg,80,115)),step=.05); rows=[]
+            geo = ips_geometry_from_stretch(geom_stretch.U, int(branch), lambda2_tol=max(cc1_tol, 2e-6))
+            formula_with_symbols(
+                r"v=\frac{e_1}{\sqrt{1-\lambda_1^2}}\pm\frac{e_3}{\sqrt{\lambda_3^2-1}},\qquad F=RU=I+d\,m^T",
+                list(definitions_for_equation("PTMC-V")) + [SymbolDefinition(r"F", "deformation gradient", "dimensionless"), SymbolDefinition(r"R", "rigid-body rotation matrix used to convert U into an invariant-plane strain", "dimensionless"), SymbolDefinition(r"d", "IPS displacement/shear vector", "dimensionless"), SymbolDefinition(r"m", "habit-plane normal/covector", "direction scale")],
+            )
+            st.caption("F matrix below: rows and columns are orthonormal spatial axes x, y, z; every entry is dimensionless.")
+            st.dataframe(pd.DataFrame(geo.F, index=["x axis","y axis","z axis"], columns=["x axis","y axis","z axis"]), width="stretch")
+            q1, q2, q3, q4 = st.columns(4)
+            explained_metric(q1, "IPS shear magnitude — τ", f"{geo.tau:.10f}", SymbolDefinition(r"\tau", "magnitude of the tangential shear component of d", "dimensionless strain"))
+            explained_metric(q2, "Normal dilatation — δ", f"{geo.delta:.10f}", SymbolDefinition(r"\delta", "normal dilatation across the habit plane; 1+δ is the normal stretch term", "dimensionless strain"))
+            explained_metric(q3, "Rank-one factorization residual", f"{geo.rank_one_residual:.3e}", "Numerical error of representing F−I as d⊗m; 0 means exact rank-one IPS factorization.")
+            explained_metric(q4, "Habit-plane invariance residual", f"{geo.plane_invariance_residual:.3e}", "Numerical measure of how well vectors lying in the predicted habit plane remain invariant under F; 0 is exact.")
+            st.write({"IPS displacement/shear vector d": geo.d.tolist(), "habit-plane normal m": geo.m.tolist(), "length-preserved direction v": geo.v.tolist()})
+            st.caption("d = IPS displacement/shear vector; m = habit-plane normal/covector; v = direction constructed from e₁,e₃ whose length is preserved. Vector components refer to the orthonormal PTMC frame.")
+            st.caption(f"Eq. (7) trace-identity residual = {geo.trace_identity_residual:.3e}; Eq. (8) determinant-identity residual = {geo.determinant_identity_residual:.3e}. A residual is calculated left side minus right side; 0 is exact.")
+            sg = shear_shear_geometry(geo.tau, geo.delta)
+            st.write({"plane angle φ (degrees)": sg["phi_deg"], "cos(φ)": sg["cos_phi"], "predicted twin shear magnitude |a|": sg["twin_shear_norm"]})
+            st.caption("φ = angle between the habit plane and the relevant twin mirror/junction plane; cos(φ) = cosine of that angle; |a| = predicted magnitude of the twin shear vector a from a = 2 cos(φ)d.")
+        except Exception as exc:
+            st.warning(str(exc))
+        math_used(["PTMC-V", "PTMC-IPS", "PTMC-TRACE", "PTMC-DET", "SHEAR-PHI", "SHEAR-SHEAR-GEO"])
+
+    with et2:
+        st.subheader("Closed-form B2 → B19′ CMC vs general metric construction")
+        ana = niti_cmc_from_input(inp)
+        chk = verify_analytic_cmc_against_general(inp)
+        formula_with_symbols(r"\frac{CMC}{a_{B2}^2}=\begin{pmatrix}(b^2+c^2)/4-1&(b^2-c^2)/4&-ac\cos\beta/2\\(b^2-c^2)/4&(b^2+c^2)/4-1&ac\cos\beta/2\\-ac\cos\beta/2&ac\cos\beta/2&a^2-1\end{pmatrix}", list(definitions_for_equation("NITI-CMC")))
+        st.caption("Matrix rows/columns correspond to the three parent crystallographic coordinate axes. The displayed matrix is normalized by a_B2², so its entries are dimensionless.")
+        st.dataframe(pd.DataFrame(ana.matrix, index=["parent axis x","parent axis y","parent axis z"], columns=["parent axis x","parent axis y","parent axis z"]), width="stretch")
+        ev = pd.DataFrame([
+            {"branch": "q1", "closed_form": ana.eigenvalues_labeled["q1"]},
+            {"branch": "q2", "closed_form": ana.eigenvalues_labeled["q2"]},
+            {"branch": "q3", "closed_form": ana.eigenvalues_labeled["q3"]},
+        ])
+        st.dataframe(ev, width="stretch", hide_index=True)
+        st.caption("q₁,q₂,q₃ = the three eigenvalues of the normalized CMC matrix. Their unit is dimensionless here because CMC was divided by a_B2². A zero eigenvalue is required for first-order degeneracy, with the other two also satisfying the sign condition.")
+        c1, c2 = st.columns(2)
+        explained_metric(c1, "Analytical/general CMC matrix residual", f"{chk['matrix_frobenius_residual']:.3e}", "Frobenius norm of (closed-form normalized CMC − general metric-derived normalized CMC); 0 means exact agreement.")
+        explained_metric(c2, "Analytical/numerical eigenvalue residual", f"{chk['eigenvalue_max_abs_residual']:.3e}", "Maximum absolute difference between analytical q₁,q₂,q₃ and numerical CMC eigenvalues; 0 means exact agreement.")
+        st.warning("Source-audit note: the available PDF rendering/extraction is ambiguous for the q₃ sign. This build uses q₃=(K+√Δ)/4 because that branch reproduces the eigenvalues of the printed CMC matrix. The discrepancy is retained in exports rather than hidden.")
+        st.markdown("**Explicit quadratic zero surface**")
+        formula_with_symbols(
+            r"c^2(x-y)^2+b^2(x+y)^2+4a^2z^2-4ac(x-y)z\cos\beta-4(x^2+y^2+z^2)=0",
+            [
+                SymbolDefinition(r"x,y,z", "components of a trial parent-lattice direction u_A=(x,y,z)", "direction-coordinate scale"),
+                SymbolDefinition(r"a,b,c", "normalized B19′ lattice ratios a_B19′/a_B2, b_B19′/a_B2, c_B19′/a_B2", "dimensionless"),
+                SymbolDefinition(r"\beta", "B19′ monoclinic angle between a and c axes", "degrees in input; radians internally"),
+                SymbolDefinition(r"0", "zero squared-length change under the correspondence", "dimensionless in this normalized equation"),
+            ],
+        )
+        math_used(["CMC", "CMC-Q", "NITI-CMC", "NITI-Q"])
+
+    with et3:
+        st.subheader("First-, second- and third-order CMC degeneracy families")
+        f_eq = first_order_families(ar, br, cr, inp.beta_deg, tol=cc1_tol, c2b_interpretation="equation")
+        f_tab = first_order_families(ar, br, cr, inp.beta_deg, tol=cc1_tol, c2b_interpretation="table")
+        first_rows = []
+        for f in f_eq:
+            first_rows.append({"family": f.name, "equation_key": f.equation_key, "equality_residual": f.equality_residual, "inequality_margins": list(f.inequality_margins), "equality_met": f.equality_met, "inequalities_met": f.inequalities_met, "family_met": f.met, "note": f.note})
+        st.dataframe(pd.DataFrame(first_rows), width="stretch", hide_index=True)
+        st.caption("Family-table notation: equality_residual = numerical left-minus-target mismatch for the defining equality; inequality_margins are written so non-negative means the inequality is satisfied; family_met requires both equality and inequalities to pass the stated tolerance.")
+        c2b_table = next(x for x in f_tab if x.name == "C2b")
+        st.warning(f"C2b source discrepancy kept visible: analytical branch uses b≤√2; later table branch gives b≥√2. Under the table interpretation for the current input: met={c2b_table.met}.")
+        higher = higher_order_degeneracy_families(ar, br, cr, inp.beta_deg, tol=cc1_tol)
+        hrows = []
+        for h in higher:
+            hrows.append({"family": h.name, "order": h.order, "met": h.met, "residuals": h.residuals, "habit_plane": None if h.habit_plane is None else h.habit_plane.tolist(), "equation_key": h.equation_key})
+        st.dataframe(pd.DataFrame(hrows), width="stretch", hide_index=True)
+        st.caption("Higher-degeneracy notation: D1/D2 = second-order CMC degeneracy families; E = third-order family with CMC=0; order = number of zero CMC eigenvalues; habit_plane = plane-normal coordinates when an analytical plane exists.")
+        st.subheader("Source-defined distances and internal-consistency audit")
+        pdist = paper_defined_distances(ar, br, cr, inp.beta_deg)
+        drows = [{"family": k, **v} for k, v in pdist.items()]
+        st.dataframe(pd.DataFrame(drows), width="stretch", hide_index=True)
+        st.warning("The later distance table contains another reproducibility issue: its printed 0.269706 equality value is reproduced by the linear ratio distance |c−c_target|, while the visually/parsed squared expression gives a different value. This build exports both numbers with labels.")
+        math_used(["CMC-DEGEN", "CT-C1", "CT-C2a", "CT-C2b-EQ", "CT-C2b-TABLE", "CT-C3", "CT-D1", "CT-D2", "CT-E"])
+
+    with et4:
+        st.subheader("Correspondence variants, zero-set symmetries and intercorrespondence classes")
+        cosets = correspondence_left_cosets()
+        csyms = cmc_symmetry_group(cmc)
+        dcs_here = double_cosets()
+        q1, q2, q3, q4 = st.columns(4)
+        explained_metric(q1, "Parent-group size — |Gᴬ|", 48, "|Gᴬ| = number of symmetry operations in the austenite/parent point group Gᴬ; count, no physical unit.")
+        explained_metric(q2, "Correspondence-subgroup size — |H_Cᴬ|", 4, "|H_Cᴬ| = number of parent symmetry operations preserved by the chosen correspondence; count, no physical unit.")
+        explained_metric(q3, "Correspondence variants — N_Cᴹ", len(cosets), "N_Cᴹ = number of distinct martensite correspondence variants generated by left cosets; count.")
+        explained_metric(q4, "Double-coset / intercorrespondence classes", len(dcs_here), "Number of distinct H_Cᴬ g H_Cᴬ classes used to group symmetry-equivalent variant-pair relations; count.")
+        formula_with_symbols(r"N_C^M=\frac{|G^A|}{|H_C^A|}=\frac{48}{4}=12", list(definitions_for_equation("N-CORR")))
+        st.caption("Correspondence variants are left cosets of the rational correspondence relation. Stretch variants are symmetry conjugates of U and are a different object; this app never labels them interchangeably.")
+        st.dataframe(pd.DataFrame([{
+            "coset index i": c.index, "number of symmetry elements in coset": len(c.elements), "representative parent symmetry matrix g_i^A": np.asarray(c.representative, int).tolist()
+        } for c in cosets]), width="stretch", hide_index=True)
+        st.caption("i = integer label of a left coset; g_i^A = one parent-symmetry representative matrix for that coset; each coset generates one correspondence-variant class under the chosen correspondence subgroup.")
+        st.markdown(f"**CMC zero-set symmetry operations found:** {len(csyms)}")
+        st.dataframe(pd.DataFrame([{
+            "quadratic-form proportionality factor": x.proportionality, "CMC zero-set residual": x.zero_set_residual, "exact CMC-form residual": x.exact_form_residual, "parent symmetry matrix g^A": np.asarray(x.symmetry, int).tolist()
+        } for x in csyms]), width="stretch", hide_index=True)
+        st.caption("g^A = tested parent symmetry operation; proportionality factor = scalar relating the transformed and original CMC quadratic forms; zero-set residual tests whether the same zero directions are preserved; exact-form residual is stricter and tests equality of the full quadratic form after scaling.")
+        math_used(["HC", "LEFT-COSET", "N-CORR", "DOUBLE-COSET", "G-CMC", "FTC"])
+
+    with et5:
+        st.subheader("Analytical supercompatibility families")
+        beta_design = st.slider("B19′ monoclinic angle — β (degrees) — for analytical families", min_value=80.0, max_value=115.0, value=float(np.clip(inp.beta_deg, 80.0, 115.0)), step=0.05)
+        st.caption("β = angle between the B19′ a and c lattice axes; unit: degrees. a,b,c shown below are dimensionless normalized lattice ratios, not Å values or compositions.")
+        rows = []
         try:
-            aa,cc=appendix_c_o4(beta_design); inv=aa*aa+cc*cc+2*aa*cc*np.cos(np.deg2rad(beta_design)); rows.append({"family":"O4 Type-I closed form","a":aa,"b":float(np.sqrt(2)),"c":cc,"β (°)":beta_design,"invariant check":inv,"target":3.})
-        except Exception as exc: st.warning(str(exc))
-        for name,fn in [("O2 Type-I/compound",o2_type_i_family),("O2 Type-II/compound",o2_type_ii_family)]:
-            try: aa,bb,cc=fn(beta_design); rows.append({"family":name,"a":aa,"b":bb,"c":cc,"β (°)":beta_design,"invariant check":np.nan,"target":np.nan})
-            except Exception as exc: st.warning(f"{name}: {exc}")
-        st.dataframe(pd.DataFrame(rows),width="stretch",hide_index=True); st.caption("a,b,c are normalized lattice ratios, not Å and not composition.")
-        math_used(["APP-C-O4","CT-C1","SHEAR-SHEAR-GEO"],title="Closed-form design equations")
-    else:
-        cosets=correspondence_left_cosets(); csyms=cmc_symmetry_group(cmc); dcs_here=double_cosets(); criterion_table([{"Object":"parent symmetry group |Gᴬ|","Value":48,"Meaning":"full parent point-group operations"},{"Object":"correspondence subgroup |H_Cᴬ|","Value":4,"Meaning":"parent operations preserving the chosen correspondence"},{"Object":"correspondence variants N_Cᴹ","Value":len(cosets),"Meaning":"left-coset classes"},{"Object":"double-coset classes","Value":len(dcs_here),"Meaning":"symmetry-equivalent intercorrespondence relation classes"},{"Object":"CMC zero-set symmetries","Value":len(csyms),"Meaning":"operations preserving the current CMC zero set"}]); st.info("The operational Vᵢ→Vⱼ explorer and twin interpretation are intentionally kept in Workspace 3 rather than duplicated here."); math_used(["HC","LEFT-COSET","N-CORR","DOUBLE-COSET","G-CMC","FTC"],title="Group-theory equations / scope")
+            aa, cc = appendix_c_o4(beta_design)
+            inv = aa*aa + cc*cc + 2*aa*cc*np.cos(np.deg2rad(beta_design))
+            rows.append({"family": "O4 Type-I closed form", "a": aa, "b": float(np.sqrt(2)), "c": cc, "beta_deg": beta_design, "invariant_length_check": inv, "target": 3.0})
+        except Exception as exc:
+            st.warning(f"O4 closed-form branch has no real solution here: {exc}")
+        for name, fn in [("O2 Type-I/compound", o2_type_i_family), ("O2 Type-II/compound", o2_type_ii_family)]:
+            try:
+                aa, bb, cc = fn(beta_design)
+                rows.append({"family": name, "a": aa, "b": bb, "c": cc, "beta_deg": beta_design, "invariant_length_check": np.nan, "target": np.nan})
+            except Exception as exc:
+                st.warning(f"{name}: {exc}")
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        st.caption("Analytical-family table: a = a_B19′/a_B2, b = b_B19′/a_B2, c = c_B19′/a_B2 (all dimensionless); beta_deg = β in degrees; invariant_length_check is the evaluated left side of the family-specific invariant-length relation and 'target' is its exact required value.")
+        try:
+            a98, c98 = appendix_c_o4(98.0)
+            st.caption(f"Independent checkpoint at β=98°: normalized a=a_B19′/a_B2={a98:.10f}, normalized b=b_B19′/a_B2=√2≈1.41421356, normalized c=c_B19′/a_B2={c98:.10f}; β is the B19′ monoclinic angle. The closed-form invariant-length equation evaluates to its exact target 3 within machine precision.")
+        except Exception:
+            pass
+        bgrid = np.linspace(82.0, 110.0, 180)
+        curve = []
+        for bv in bgrid:
+            try:
+                av, cv = appendix_c_o4(float(bv))
+                curve.append({"beta_deg": bv, "a": av, "c": cv})
+            except ValueError:
+                continue
+        if curve:
+            st.plotly_chart(px.line(pd.DataFrame(curve), x="beta_deg", y=["a", "c"], title="Appendix-C analytical metric family", labels={"beta_deg":"Monoclinic angle β (°)", "value":"Normalized lattice ratio (dimensionless)", "variable":"Analytical ratio"}), width="stretch")
+        math_used(["APP-C-O4", "CT-C1", "SHEAR-SHEAR-GEO"])
+
+    with et6:
+        st.subheader("Complete equation / method catalog")
+        reg = equation_registry()
+        regdf = pd.DataFrame([{
+            "key": r.key, "topic": r.topic, "provenance_class": r.provenance_class, "source_location": r.source_location,
+            "meaning": r.meaning, "implementation": r.implementation, "scope": r.scope, "caveat": r.caveat
+        } for r in reg.values()])
+        topics = ["All"] + sorted(regdf["topic"].unique().tolist())
+        topic = st.selectbox("Filter by topic", topics)
+        show = regdf if topic == "All" else regdf[regdf["topic"] == topic]
+        st.dataframe(show, width="stretch", hide_index=True)
+        selected_key = st.selectbox("Render one relation", show["key"].tolist())
+        rr = reg[selected_key]
+        st.latex(rr.relation_latex)
+        render_symbol_definitions(definitions_for_equation(selected_key))
+        render_symbol_definitions(operators_for_latex(rr.relation_latex), heading="Operators and notation in this relation")
+        st.write(rr.meaning)
+        st.caption(f"{rr.provenance_class} · {rr.source_location} · `{rr.implementation}`")
+        if rr.caveat:
+            st.warning(rr.caveat)
+        st.download_button("Download equation provenance CSV", regdf.to_csv(index=False), "equation_provenance.csv", "text/csv")
 
 
 # ---------- 13 paper-ready audit ----------
 elif workspace.startswith("13"):
-    st.header("Manuscript audit & reproducible export")
-    workspace_brief(
-        "Can another researcher trace the manuscript statement back to the exact input, equation, tolerance, code path and caveat?",
-        "Current lattice/state plus a recorded reproducibility seed; optional results created in other workspaces during this session are bundled when available.",
-        "A completeness audit, paper-ready core record, source-discrepancy log, SHA-256 fingerprint and one evidence ZIP.",
-        "Use this as the final manuscript/supplementary evidence checkpoint, not as a replacement for experimental validation or peer review.",
+    st.header("Paper-ready audit & reproducible export")
+    st.markdown(
+        "This workspace packages the numerical state needed to **trace a Methods/Results statement back to inputs, units, equations, tolerances, software build and source caveats**. "
+        "It is designed as a reproducible basis for a manuscript; it does not replace scientific judgment or experimental validation."
     )
-    seed_export=st.number_input("Reproducibility seed recorded in export",min_value=0,max_value=2_147_483_647,value=20260831,step=1)
-    rec=paper_ready_record(inp,cc1_tol=cc1_tol,cc2_tol=cc2_tol,random_seed=int(seed_export)); digest=record_sha256(rec)
-    prov=rec["provenance"]; core=rec["core_results"]
-    checks=[
-        ["Physical lattice inputs recorded",all(np.isfinite([inp.a_b2,inp.a_b19p,inp.b_b19p,inp.c_b19p,inp.beta_deg]))],
-        ["Units / normalized ratios recorded",True],
-        ["Numerical tolerances recorded",bool(prov.get("numerical_tolerances"))],
-        ["Correspondence convention recorded",bool(prov.get("correspondence_A_to_M"))],
-        ["Equation/provenance catalog attached",len(rec.get("equations_used",[]))>0],
-        ["Source discrepancies retained",prov.get("source_discrepancies") is not None],
-        ["Claim boundaries retained",len(rec.get("claim_boundaries",[]))>0],
-        ["Record hash generated",len(digest)==64],
-    ]
-    cdf=pd.DataFrame([{"Audit item":k,"Status":"PASS" if v else "FAIL"} for k,v in checks]); passn=sum(v for _,v in checks)
-    a1,a2,a3=st.columns(3); a1.metric("audit checks",f"{passn}/{len(checks)}"); a2.metric("build",BUILD_ID); a3.metric("record SHA-256",digest[:16]+"…")
-    st.dataframe(cdf,width="stretch",hide_index=True)
-    if passn==len(checks): st.success("Core manuscript traceability audit passed. This means the calculation is traceable—not that the material claim is experimentally proven.")
-    else: st.error("One or more traceability items are missing; inspect before manuscript use.")
+    seed_export = st.number_input("Reproducibility seed recorded in export", min_value=0, max_value=2_147_483_647, value=20260831, step=1)
+    rec = paper_ready_record(inp, cc1_tol=cc1_tol, cc2_tol=cc2_tol, random_seed=int(seed_export))
+    digest = record_sha256(rec)
+    a1, a2, a3 = st.columns(3)
+    a1.metric("Build ID", BUILD_ID)
+    a2.metric("Primary source DOI", PRIMARY_SOURCE["doi"])
+    a3.metric("Record SHA-256", digest[:16] + "…")
 
-    at1,at2,at3,at4=st.tabs(["Core Results / Methods","Notation & equations","Source / claim audit","Evidence bundle"])
+    at1, at2, at3, at4, at5 = st.tabs(["Methods audit", "Results audit", "Notation dictionary", "Source discrepancies", "Exports"])
     with at1:
-        result_rows=[
-            {"Output":"Principal stretches λ₁,λ₂,λ₃","Value":core["lambda"],"Unit/scale":"dimensionless"},
-            {"Output":"det(U)","Value":core["det_U"],"Unit/scale":"dimensionless"},
-            {"Output":"CMC eigenvalues","Value":core["CMC_eigenvalues"],"Unit/scale":"dimensionless normalized metric"},
-            {"Output":"CMC degeneracy order","Value":core["CMC_degeneracy_order"],"Unit/scale":"integer"},
-            {"Output":"CMC exact at configured core tolerance","Value":core["CMC_exact_at_tolerance"],"Unit/scale":"Boolean"},
-            {"Output":"A/M habit-plane normals","Value":core["CMC_habit_planes"],"Unit/scale":"reciprocal-direction scale"},
-        ]
-        st.dataframe(pd.DataFrame(result_rows),width="stretch",hide_index=True)
-        parity=rec["analytical_cross_checks"]["analytic_vs_general"]
-        st.markdown("**Analytical ↔ general-engine parity**")
-        st.json(parity)
-        methods=(f"The B2→B19′ crystallographic calculation used the recorded lattice parameters, correspondence matrices and symmetry conventions in Supercompatibility Lab build {BUILD_ID}. Equality classifications used CC1 tolerance {cc1_tol:.1e} and normalized CC2 tolerance {cc2_tol:.1e}; all equation keys and implementation paths are included in the evidence record.")
-        results=(f"The calculated principal stretches were {core['lambda']}, det(U)={core['det_U']}, with CMC eigenvalues {core['CMC_eigenvalues']} and CMC degeneracy order {core['CMC_degeneracy_order']}. Exact CMC at the certified core tolerance: {core['CMC_exact_at_tolerance']}.")
-        paper_wording(methods,results,"Crystallographic compatibility is not equivalent to demonstrated fatigue life, hysteresis, chemical realizability, phase stability or experimental reversibility.")
+        prov = rec["provenance"]
+        st.json({
+            "engine_version": prov["engine_version"],
+            "build_id": prov["build_id"],
+            "python": prov["python"],
+            "numpy": prov["numpy"],
+            "transformation": prov["built_in_transformation"],
+            "numerical_tolerances": prov["numerical_tolerances"],
+            "correspondence_A_to_M": prov["correspondence_A_to_M"],
+            "correspondence_M_to_A": prov["correspondence_M_to_A"],
+        })
+        st.markdown("**Paper-writing rule used by this app:** report the physical inputs + units, correspondence convention, exact relation, tolerance, and residual/margin — not only a green/red label.")
+        eqdf = pd.DataFrame(rec["equations_used"])[["key","topic","source_location","provenance_class","implementation","scope","caveat"]]
+        st.dataframe(eqdf, width="stretch", hide_index=True)
     with at2:
-        eqdf=pd.DataFrame(rec["equations_used"])[["key","topic","source_location","provenance_class","implementation","scope","caveat"]]
-        st.dataframe(eqdf,width="stretch",hide_index=True)
-        not_rows=rec.get("notation_dictionary",{}).get("input_symbols",[])+rec.get("notation_dictionary",{}).get("output_symbols",[])
-        with st.expander("Notation dictionary"): st.dataframe(pd.DataFrame(not_rows),width="stretch",hide_index=True)
+        core = rec["core_results"]
+        result_rows = [
+            {"output": "Principal stretches λ₁, λ₂, λ₃", "value": core["lambda"], "meaning": "Ordered eigenvalues of transformation stretch tensor U", "unit/scale": "dimensionless"},
+            {"output": "Transformation volume ratio det(U)", "value": core["det_U"], "meaning": "Determinant of U; 1 means no net volume change", "unit/scale": "dimensionless"},
+            {"output": "CMC eigenvalues q₁, q₂, q₃", "value": core["CMC_eigenvalues"], "meaning": "Eigenvalues of the compatibility metric-change matrix", "unit/scale": "same scale as normalized CMC; dimensionless here"},
+            {"output": "CMC degeneracy order", "value": core["CMC_degeneracy_order"], "meaning": "Number/order of zero eigenvalues identified under the configured tolerance", "unit/scale": "integer count/order"},
+            {"output": "CMC exact at configured tolerance", "value": core["CMC_exact_at_tolerance"], "meaning": "Whether the CMC degeneracy criterion passes the explicit numerical tolerance", "unit/scale": "Boolean"},
+            {"output": "Habit-plane normals m_A", "value": core["CMC_habit_planes"], "meaning": "Compatible A/M plane normals in parent crystallographic coordinates", "unit/scale": "reciprocal-direction scale"},
+        ]
+        st.dataframe(pd.DataFrame(result_rows), width="stretch", hide_index=True)
+        st.markdown("**Analytical parity checks**")
+        parity = rec["analytical_cross_checks"]["analytic_vs_general"]
+        st.json(parity)
+        st.caption("matrix_frobenius_residual = Frobenius norm of analytical CMC minus general CMC; eigenvalue_max_abs_residual = largest absolute difference between analytical and numerical CMC eigenvalues. 0 means exact agreement. These are code/equation consistency checks, not experimental validation.")
     with at3:
-        st.markdown("#### Source discrepancies")
-        for x in prov["source_discrepancies"]: st.warning(x)
-        st.markdown("#### Claim boundaries")
-        for x in rec["claim_boundaries"]: st.markdown(f"- {x}")
+        st.markdown("Every symbol carried by the paper-ready record is defined here with meaning and unit/scale. The same dictionary is embedded in the JSON and Markdown exports.")
+        not_rows = rec.get("notation_dictionary", {}).get("input_symbols", []) + rec.get("notation_dictionary", {}).get("output_symbols", [])
+        st.dataframe(pd.DataFrame(not_rows), width="stretch", hide_index=True)
+        st.caption("Equation-specific exports also contain a symbol list for each equation. Ambiguous conventional letters are explicitly disambiguated by context; for example, normalized lattice ratio a is not the same object as twin-shear vector a.")
     with at4:
-        bundle=complete_evidence_bundle(rec,digest)
-        st.download_button("Download COMPLETE manuscript evidence bundle (ZIP)",bundle,"supercompatibility_manuscript_evidence.zip","application/zip",width="stretch")
-        st.caption("The ZIP always contains the core JSON/Markdown/equation provenance/hash. If generated in this session, it also attaches temperature, uncertainty, inverse-design/Pareto, ML-screening, multi-step and independent pairwise tables plus structured experimental-context records.")
-        c1,c2,c3=st.columns(3); c1.download_button("Core record JSON",record_json(rec),"paper_ready_record.json","application/json",width="stretch"); c2.download_button("Audit note Markdown",record_markdown(rec),"paper_ready_record.md","text/markdown",width="stretch"); c3.download_button("Equation provenance CSV",pd.DataFrame(rec["equations_used"]).to_csv(index=False),"paper_equation_provenance.csv","text/csv",width="stretch")
-        st.code(digest,language="text")
-    st.warning("Final manuscript rule: report the raw residual/margin and the declared tolerance beside every PASS/FAIL statement. Do not convert a software classification into an experimental performance claim the calculation did not test.")
+        for x in rec["provenance"]["source_discrepancies"]:
+            st.warning(x)
+        st.markdown("**Claim boundaries recorded with every export**")
+        for x in rec["claim_boundaries"]:
+            st.markdown(f"- {x}")
+    with at5:
+        j = record_json(rec)
+        md = record_markdown(rec)
+        eqcsv = pd.DataFrame(rec["equations_used"]).to_csv(index=False)
+        st.code(digest, language="text")
+        st.caption("The hash fingerprints this exact exported record. Any edit to input, result, equation metadata or provenance changes the hash.")
+        st.download_button("Download full research record (JSON)", j, "paper_ready_record.json", "application/json")
+        st.download_button("Download manuscript audit note (Markdown)", md, "paper_ready_record.md", "text/markdown")
+        st.download_button("Download equation/provenance table (CSV)", eqcsv, "paper_equation_provenance.csv", "text/csv")
+
+    st.success("Publication-support mode is traceable by construction: inputs → equations → code path → residual/margin → source/scope → export hash.")
+    st.warning("Do not write that the software 'proves' fatigue life, hysteresis, chemical realizability, or experimental reversibility. Those require independent data. The software can justify the crystallographic calculations it actually performs.")

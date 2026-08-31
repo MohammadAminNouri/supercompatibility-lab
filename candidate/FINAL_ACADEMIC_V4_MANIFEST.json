@@ -1,0 +1,24 @@
+{
+  "base": "paper-ready-v3",
+  "revision": "2026-08-31-final-academic-v4",
+  "workspace3_sha256": "3ce2b6dd0007df961475ea3143a5ca7a801a7ad25b02035971db436da32fc8ef",
+  "workspace3_preserved_exactly": true,
+  "embedded_scientific_modules_preserved_exactly": true,
+  "embedded_data_preserved_exactly": true,
+  "changes": [
+    "Compact shared lattice input bar for all non-EBSD/non-Workspace3 pages",
+    "Clear research-question/input/output/paper-use strip per workspace",
+    "Dependency-aware Workspace1 verdict, no arbitrary score or vague blocked states",
+    "Selected-domain PTMC criteria table with full domain table advanced",
+    "Temperature/uncertainty quantitative summaries and session evidence retention",
+    "Searchable literature and structured microstructure/functional records",
+    "Inverse-design before/after table, strategy presets, explicit chemical-realizability guard",
+    "ML dataset audit, normalized CV error, negative-R2 warning, physics-screening scope",
+    "Multi-step stage summary with explicit generic-stage applicability guard",
+    "EBSD reconstruction wrapper clarifying inputs/outputs without changing reconstruction engine",
+    "Independent methods relabeled by applicability to current NiTi transformation",
+    "Applicability map replacing vague frontier page",
+    "Task-based equation library removing duplicate operator/twin operational tables",
+    "One-click complete manuscript evidence ZIP with optional session artifacts"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "base": "installed integrated variants/operators/IW revision",
+  "revision": "2026-08-31b guided Workspace 3 + corrected reorientation IW",
+  "checks": [
+    "syntax",
+    "12 distortion states",
+    "self-transition IW=0",
+    "tension/compression sign reversal",
+    "EBSD identity orientation transform",
+    "12x12 operator map",
+    "48/12/7 CT group structure",
+    "local input UI"
+  ]
+}

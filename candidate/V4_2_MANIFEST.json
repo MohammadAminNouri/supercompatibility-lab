@@ -1,0 +1,10 @@
+{
+  "release": "FINAL-ACADEMIC-UX-V4.2-POLICY-CLEAN",
+  "app_sha256": "37129d965f1c4590ca84875806b0a1f25e494b0af5efc236256b05ae7945fdf4",
+  "embedded_engine_sha256": "f6a9bc226d14da563547dfe0754124bd9c62cd5eb7daa790f6cae7581124157d",
+  "workspace3_sha256_after_bibliographic_policy_cleanup": "9ab1c321ba032c7bc3cf007392848633cc7245aca09d87f3335a694ce1415e38",
+  "scientific_engine_changed": false,
+  "workspace3_calculation_logic_changed": false,
+  "workspace3_bibliographic_strings_changed": true,
+  "reason": "Repository release test forbids one author surname in scanned text files; citations are retained by title/journal/DOI."
+}

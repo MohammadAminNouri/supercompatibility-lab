@@ -1,0 +1,20 @@
+{
+  "release": "FINAL-ACADEMIC-UX-V4.1-DETERMINISTIC-BUNDLE-FIX",
+  "date": "2026-08-31",
+  "application_science_and_ui": "identical to verified V4 candidate",
+  "application_sha256": "0a270ef83126212e42aff2e14e73e307739c9521375133489a8fbecaf03ac91f",
+  "reason_for_v4_1": "V4 updated only supercompatibility_final.py, while the repository's deterministic bundle audit requires app.py, streamlit_app.py, supercompatibility_r7.py, and supercompatibility_final.py to be byte-identical.",
+  "installer_behavior": [
+    "verify candidate before touching repository",
+    "require all four deterministic entrypoints to exist",
+    "back up all four entrypoints",
+    "copy the exact same verified V4 application to all four entrypoints",
+    "assert all four SHA-256 hashes are identical",
+    "run V4 scientific/UI verifier",
+    "run repository deployment / embedded / equation / release / self-test checks when present",
+    "run pytest when tests directory exists",
+    "restore all four entrypoints automatically if any validation step fails"
+  ],
+  "scientific_engine_changed_from_v4": false,
+  "workspace_3_changed_from_v4": false
+}

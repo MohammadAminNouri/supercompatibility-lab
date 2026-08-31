@@ -1,0 +1,23 @@
+{
+  "base_build": "2026-08-31-final-truth-valid-reconstruction",
+  "integration_revision": "2026-08-31-integrated-variants-operators-iw",
+  "base_file_bytes": 271132,
+  "modified_file_bytes": 289710,
+  "scientific_preservation": [
+    "embedded src engine retained",
+    "CMC/SMC/cofactor/shear-shear retained",
+    "inverse design retained",
+    "parent/daughter reconstruction retained",
+    "paper-ready audit retained"
+  ],
+  "new_or_reworked": [
+    "Workspace 3 unified variants/operators/twins/IW flow",
+    "12x12 correspondence-variant operator map",
+    "multivalued reduced operator-composition table",
+    "IW = sigma:epsilon with epsilon=F-I",
+    "symmetry-generated NiTi distortion-variant IW ranking",
+    "IW CSV and evidence JSON exports",
+    "responsive CSS refinements",
+    "Streamlit width API migration"
+  ]
+}

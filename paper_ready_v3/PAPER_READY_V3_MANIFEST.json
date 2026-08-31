@@ -1,0 +1,24 @@
+{
+  "base": "guided variants/twins/IW revision 2026-08-31b",
+  "revision": "paper-ready variants/twins/IW revision 2026-08-31c",
+  "scope": "Workspace 3 reconfiguration + reporting helpers only; embedded scientific src engine preserved",
+  "scientific_fixes": [
+    "CMC failure now reports raw/labeled eigenvalues, relative degeneracy distance and exact numerical criterion",
+    "shear/shear is NOT COMPUTED when CMC prerequisite is absent; no vague not-evaluable status",
+    "variant pair is selected before twin class; pair->double-coset->representative twin chain is explicit",
+    "representative twin coordinates are not falsely claimed to be unique pair-specific coordinates",
+    "B2 twin shear/plane vectors are converted to B19-prime small-index labels only when strict angular fit is justified",
+    "first-order and higher-order analytical CMC family audits included",
+    "C2b source discrepancy is preserved and declared",
+    "IW remains Xiao-style reorientation F_i_to_j=F_j F_i^-1; manual D_i selection is explicitly labeled theoretical unless mapped to EBSD"
+  ],
+  "paper_outputs": [
+    "methods paragraph",
+    "results paragraph",
+    "metadata JSON",
+    "CMC analytical-family CSV",
+    "references",
+    "evidence ZIP"
+  ],
+  "verification": "verify_paper_ready_v3.py"
+}
