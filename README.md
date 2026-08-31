@@ -51,7 +51,7 @@ The B2/B19′ lattice input form is hidden automatically in the parent-reconstru
 
 **No-symbol-left-behind rule:** every mathematical symbol shown in the app is defined immediately beside the formula, input, output, or technical table where it appears. The same notation dictionary is embedded in paper-ready JSON/Markdown exports, so a result remains interpretable outside the UI.
 
-**Final validation:** 93/93 automated tests pass across the complete suite when run in validated batches, including dedicated EBSD import/segmentation, academic reconstruction comparison and export tests. Equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits also pass. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
+**Final validation:** 96/96 automated tests pass across the complete suite when run in validated batches, including dedicated EBSD import/segmentation, academic reconstruction comparison and export tests. Equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits also pass. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
 
 **B19′ → B2 → B19′ cycle reconstruction:** the parent/daughter workspace can now reuse a completed B19′→B2 reconstruction and regenerate every symmetry-distinct B19′ orientation branch from each reconstructed B2 parent. It reports round-trip closure residuals, observed branch occupancy, branch-to-branch orientation-change matrices, and can match an independently measured later-cycle B19′ EBSD dataset. A metric-aware NiTi natural/AQ quick setup constructs the OR from `(010)B19′ ∥ (110)B2` and `[101]B19′ ∥ [−1 1 1]B2` using direct and reciprocal lattice metrics rather than treating monoclinic Miller indices as Cartesian vectors.
 
@@ -339,3 +339,11 @@ Likewise, equality conditions such as \(\lambda_2=1\), CC2=0 and \(\varepsilon=0
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+
+## Reconstruction truth-validation hardening
+
+- Built-in synthetic daughter data are generated from the **currently selected OR and parent/daughter symmetries**; no hidden KS/FCC→BCC dataset is reused for NiTi CT/Otsuka–Ren validation.
+- Known-truth validation uses **Adjusted Rand Index (ARI), homogeneity, completeness, V-measure, and parent-boundary precision/recall/F1**. The legacy majority-remapped clustering accuracy is not used in the academic workbench because singleton over-segmentation can make it falsely equal 100%.
+- Cross-method ARI/NMI are explicitly labelled as **agreement, not accuracy**.
+- Detailed method evidence reports singleton-parent fraction and warns when low OR residuals are trivial singleton self-fits.

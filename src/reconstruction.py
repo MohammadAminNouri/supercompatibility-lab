@@ -952,47 +952,95 @@ def approximate_knn_edges(df: pd.DataFrame, k: int = 4) -> list[tuple[int, int]]
     return sorted(out)
 
 
+def synthetic_parent_reconstruction_demo_from_or(
+    r_child_to_parent: Array,
+    parent_sym: Iterable[Array],
+    child_sym: Iterable[Array],
+    n_per_parent: int = 12,
+    noise_deg: float = 0.35,
+    seed: int = 11,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[int, Array]]:
+    """Generate a two-parent validation dataset from the *actual selected* OR/symmetries.
+
+    This is deliberately generic: validation data must be generated with the same
+    daughter→parent rotation and symmetry groups that will be used to reconstruct it.
+    Otherwise a reconstruction can be condemned for solving a different transformation.
+    """
+    rcp = _project_so3(np.asarray(r_child_to_parent, float))
+    ps = tuple(np.asarray(x, float) for x in parent_sym)
+    cs = tuple(np.asarray(x, float) for x in child_sym)
+    if not ps or not cs:
+        raise ValueError("Synthetic validation requires non-empty parent and daughter symmetry groups.")
+    n_per_parent = int(n_per_parent)
+    if n_per_parent < 2:
+        raise ValueError("Synthetic validation needs at least two daughter grains per parent.")
+    noise_deg = float(noise_deg)
+    if noise_deg < 0:
+        raise ValueError("Synthetic orientation noise cannot be negative.")
+
+    rng = np.random.default_rng(seed)
+    p1 = Rotation.from_euler("ZXZ", [12, 28, 41], degrees=True).as_matrix()
+    p2 = Rotation.from_euler("ZXZ", [126, 52, 203], degrees=True).as_matrix()
+    # Guard against an accidental symmetry-equivalent pair for a user-defined parent group.
+    if misorientation_deg(p1, p2, ps) < 15.0:
+        p2 = Rotation.from_euler("ZXZ", [73, 67, 151], degrees=True).as_matrix()
+    parents = {1: p1, 2: p2}
+    rows: list[dict] = []
+    edges: list[dict] = []
+    gid = 1
+    for pid, gp in parents.items():
+        variants = unique_child_variants(gp, rcp, ps, cs)
+        if not variants:
+            raise ValueError("Selected OR/symmetries generated no daughter variants.")
+        start = gid
+        for k in range(n_per_parent):
+            g = variants[k % len(variants)]
+            axis = rng.normal(size=3)
+            axis /= np.linalg.norm(axis)
+            ang = np.deg2rad(rng.normal(0, noise_deg))
+            noisy = Rotation.from_rotvec(axis * ang).as_matrix() @ g
+            e1, E, e2 = matrix_to_bunge_euler(noisy)
+            rows.append({
+                "grain_id": gid, "phi1_deg": e1, "Phi_deg": E, "phi2_deg": e2,
+                "x": float(k % 4 + (pid - 1) * 6), "y": float(k // 4),
+                "true_parent_id": pid, "synthetic_source_variant_id": int(k % len(variants) + 1),
+            })
+            gid += 1
+        ids = list(range(start, gid))
+        for a, b in zip(ids[:-1], ids[1:]):
+            edges.append({"grain_id_1": a, "grain_id_2": b, "true_parent_boundary": False})
+        for a, b in zip(ids[:-4], ids[4:]):
+            edges.append({"grain_id_1": a, "grain_id_2": b, "true_parent_boundary": False})
+    # Exactly one known inter-parent adjacency challenges boundary classification.
+    edges.append({"grain_id_1": n_per_parent, "grain_id_2": n_per_parent + 1, "true_parent_boundary": True})
+    return pd.DataFrame(rows), pd.DataFrame(edges), parents
+
+
 def synthetic_parent_reconstruction_demo(
     preset_name: str = "Kurdjumov–Sachs (FCC parent → BCC child)",
     n_per_parent: int = 12,
     noise_deg: float = 0.35,
     seed: int = 11,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[int, Array]]:
+    """Backward-compatible preset wrapper around the selected-OR generator."""
     preset = orientation_relationship_presets()[preset_name]
-    ps = symmetry_group(preset.parent_symmetry)
-    cs = symmetry_group(preset.child_symmetry)
-    rng = np.random.default_rng(seed)
-    # two well-separated parent orientations
-    p1 = Rotation.from_euler("ZXZ", [12, 28, 41], degrees=True).as_matrix()
-    p2 = Rotation.from_euler("ZXZ", [126, 52, 203], degrees=True).as_matrix()
-    parents = {1: p1, 2: p2}
-    rows = []
-    edges = []
-    gid = 1
-    for pid, gp in parents.items():
-        variants = unique_child_variants(gp, preset.matrix_child_to_parent, ps, cs)
-        start = gid
-        for k in range(n_per_parent):
-            g = variants[k % len(variants)]
-            axis = rng.normal(size=3); axis /= np.linalg.norm(axis)
-            ang = np.deg2rad(rng.normal(0, noise_deg))
-            noisy = Rotation.from_rotvec(axis * ang).as_matrix() @ g
-            e1, E, e2 = matrix_to_bunge_euler(noisy)
-            rows.append({"grain_id": gid, "phi1_deg": e1, "Phi_deg": E, "phi2_deg": e2, "x": float(k % 4 + (pid-1)*6), "y": float(k // 4), "true_parent_id": pid})
-            gid += 1
-        # chain + short-range edges within each parent
-        ids = list(range(start, gid))
-        for a, b in zip(ids[:-1], ids[1:]):
-            edges.append({"grain_id_1": a, "grain_id_2": b})
-        for a, b in zip(ids[:-4], ids[4:]):
-            edges.append({"grain_id_1": a, "grain_id_2": b})
-    # one boundary edge between parent grains to challenge algorithms
-    edges.append({"grain_id_1": n_per_parent, "grain_id_2": n_per_parent + 1})
-    return pd.DataFrame(rows), pd.DataFrame(edges), parents
+    return synthetic_parent_reconstruction_demo_from_or(
+        preset.matrix_child_to_parent,
+        symmetry_group(preset.parent_symmetry),
+        symmetry_group(preset.child_symmetry),
+        n_per_parent=n_per_parent, noise_deg=noise_deg, seed=seed,
+    )
 
 
 def reconstruction_accuracy_against_labels(result: ReconstructionResult, true_labels: Array) -> float:
-    """Permutation-invariant clustering accuracy for validation datasets."""
+    """Legacy majority-mapped cluster purity helper.
+
+    WARNING: this value can equal 1.0 under severe over-segmentation (including one
+    singleton predicted cluster per daughter), so it must NOT be used as the primary
+    academic validation metric. The Streamlit workbench uses chance-adjusted ARI,
+    homogeneity/completeness/V-measure and adjacency-boundary precision/recall/F1 instead.
+    Kept only for backwards-compatible regression tests.
+    """
     pred = np.asarray(result.parent_ids, int)
     true = np.asarray(true_labels, int)
     if len(pred) != len(true):

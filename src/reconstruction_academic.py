@@ -20,7 +20,10 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+from sklearn.metrics import (
+    adjusted_rand_score, completeness_score, homogeneity_score,
+    normalized_mutual_info_score, v_measure_score,
+)
 
 from .reconstruction import (
     ReconstructionResult,
@@ -39,6 +42,103 @@ class AgreementSummary:
     boundary_jaccard: pd.DataFrame
     matched_parent_orientation_deg: pd.DataFrame
 
+
+
+def known_truth_validation_metrics(
+    result: ReconstructionResult,
+    true_labels: Iterable[int],
+    edges: Iterable[tuple[int, int]] = (),
+) -> dict[str, float | int | str | bool]:
+    """Known-truth validation without majority-remapping pathologies.
+
+    The metrics deliberately separate cluster recovery from boundary recovery.  ARI is
+    chance-adjusted; homogeneity penalizes merging different true parents; completeness
+    penalizes fragmenting one true parent into many reconstructed parents; V-measure is
+    their harmonic mean. Boundary precision/recall/F1 are evaluated only on supplied
+    daughter-grain adjacency edges.
+    """
+    true = np.asarray(list(true_labels), int)
+    pred = np.asarray(result.parent_ids, int)
+    if len(true) != len(pred):
+        raise ValueError("Known-truth labels must match the reconstructed daughter-grain count.")
+    if len(true) == 0:
+        raise ValueError("Known-truth validation requires at least one daughter grain.")
+
+    true_ids = np.unique(true)
+    pred_ids, pred_counts = np.unique(pred, return_counts=True)
+    expected_parents = int(len(true_ids))
+    reconstructed_parents = int(len(pred_ids))
+    fragments = [int(len(np.unique(pred[true == t]))) for t in true_ids]
+
+    edges = [(int(i), int(j)) for i, j in edges]
+    tp = fp = fn = tn = 0
+    for i, j in edges:
+        if not (0 <= i < len(true) and 0 <= j < len(true)):
+            raise ValueError("Known-truth boundary validation received an out-of-range adjacency index.")
+        truth_boundary = bool(true[i] != true[j])
+        pred_boundary = bool(pred[i] != pred[j])
+        if truth_boundary and pred_boundary: tp += 1
+        elif (not truth_boundary) and pred_boundary: fp += 1
+        elif truth_boundary and (not pred_boundary): fn += 1
+        else: tn += 1
+
+    true_boundary_n = tp + fn
+    pred_boundary_n = tp + fp
+    precision = (tp / pred_boundary_n) if pred_boundary_n else (1.0 if true_boundary_n == 0 else 0.0)
+    recall = (tp / true_boundary_n) if true_boundary_n else 1.0
+    f1 = (2.0 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    union = tp + fp + fn
+    jaccard = (tp / union) if union else 1.0
+    false_boundary_rate = (fp / (fp + tn)) if (fp + tn) else 0.0
+
+    ari = float(adjusted_rand_score(true, pred))
+    nmi = float(normalized_mutual_info_score(true, pred))
+    hom = float(homogeneity_score(true, pred))
+    comp = float(completeness_score(true, pred))
+    v = float(v_measure_score(true, pred))
+    singleton_fraction = float(np.mean(pred_counts == 1)) if len(pred_counts) else np.nan
+
+    # Transparent synthetic-validation checklist. These are software validation targets,
+    # not universal experimental acceptance thresholds.
+    checks = {
+        "parent_count_exact": reconstructed_parents == expected_parents,
+        "ARI_ge_0_95": ari >= 0.95,
+        "homogeneity_ge_0_95": hom >= 0.95,
+        "completeness_ge_0_95": comp >= 0.95,
+        "boundary_F1_ge_0_90": f1 >= 0.90 if edges else True,
+        "singleton_parent_fraction_le_0_10": singleton_fraction <= 0.10,
+    }
+    if all(checks.values()):
+        status = "PASS — synthetic truth recovered"
+    elif ari >= 0.80 and v >= 0.80 and (not edges or f1 >= 0.75):
+        status = "REVIEW — mostly recovered; inspect fragmentation/boundaries"
+    else:
+        status = "FAIL — known truth not recovered"
+
+    return {
+        "validation_status": status,
+        "expected_parent_count": expected_parents,
+        "reconstructed_parent_count": reconstructed_parents,
+        "parent_count_error": reconstructed_parents - expected_parents,
+        "parent_count_ratio": float(reconstructed_parents / expected_parents) if expected_parents else np.nan,
+        "singleton_parent_fraction": singleton_fraction,
+        "mean_reconstructed_fragments_per_true_parent": float(np.mean(fragments)),
+        "max_reconstructed_fragments_for_one_true_parent": int(max(fragments)),
+        "truth_ARI": ari,
+        "truth_NMI": nmi,
+        "truth_homogeneity": hom,
+        "truth_completeness": comp,
+        "truth_V_measure": v,
+        "truth_boundary_edges": int(true_boundary_n),
+        "predicted_boundary_edges": int(pred_boundary_n),
+        "boundary_TP": int(tp), "boundary_FP": int(fp), "boundary_FN": int(fn), "boundary_TN": int(tn),
+        "truth_boundary_precision": float(precision),
+        "truth_boundary_recall": float(recall),
+        "truth_boundary_F1": float(f1),
+        "truth_boundary_Jaccard": float(jaccard),
+        "false_parent_boundary_rate": float(false_boundary_rate),
+        **checks,
+    }
 
 def _names(results: dict[str, ReconstructionResult]) -> list[str]:
     return list(results.keys())
@@ -333,6 +433,7 @@ def academic_export_zip(
     metadata: dict,
     methods_text: str,
     boundary_consensus: pd.DataFrame | None = None,
+    truth_validation: pd.DataFrame | None = None,
 ) -> bytes:
     """Create a self-contained reconstruction evidence bundle for supplementary files."""
     bio = BytesIO()
@@ -349,6 +450,8 @@ def academic_export_zip(
             z.writestr("comparison/matched_parent_orientation_disagreement_deg.csv", agreement.matched_parent_orientation_deg.to_csv())
         if boundary_consensus is not None:
             z.writestr("comparison/prior_parent_boundary_consensus.csv", boundary_consensus.to_csv(index=False))
+        if truth_validation is not None:
+            z.writestr("validation/known_truth_metrics.csv", truth_validation.to_csv(index=False))
         for method in results:
             safe = "".join(c if c.isalnum() else "_" for c in method).strip("_")
             z.writestr(f"methods/{safe}/parent_summary.csv", parent_tables[method].to_csv(index=False))

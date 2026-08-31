@@ -188,7 +188,7 @@ These tests are intentionally theorem-level or synthetic checks. They do not rep
 
 ## 16. Current automated suite
 
-The final academic-reconstruction release collects **93 tests**. They span the original metric/cofactor/twin engine, temperature, uncertainty, inverse/ML/multi-step utilities, five parent-reconstruction families, robust ANG/CTF parsing, raw-point segmentation, reconstruction reporting, cross-method ARI/NMI/boundary/orientation agreement, academic ZIP export, the metric-aware B19′→B2→B19′ cycle/retransformation workflow, the CT/Otsuka–Ren model-derived starting-OR bridge, cleaner four-workspace reconstruction navigation, and the independent compatibility methods. The complete suite was validated in deterministic batches because the execution harness times out long single test commands; every collected test passed.
+The final academic-reconstruction release collects **96 tests**. They span the original metric/cofactor/twin engine, temperature, uncertainty, inverse/ML/multi-step utilities, five parent-reconstruction families, robust ANG/CTF parsing, raw-point segmentation, reconstruction reporting, cross-method ARI/NMI/boundary/orientation agreement, academic ZIP export, the metric-aware B19′→B2→B19′ cycle/retransformation workflow, the CT/Otsuka–Ren model-derived starting-OR bridge, cleaner four-workspace reconstruction navigation, and the independent compatibility methods. The complete suite was validated in deterministic batches because the execution harness times out long single test commands; every collected test passed.
 
 
 ## 17. Analytical equation-parity validation
@@ -239,7 +239,7 @@ python scripts/verify_embedded_app.py
 python research_selftest.py
 ```
 
-`pytest --collect-only` reports **93 tests**. The final validated batches cover all 93 tests; the reconstruction file is split into two invocations only to stay below the execution harness limit. Every collected test passed. A single long `pytest -q` invocation exceeds the execution harness time limit, so the release audit does not falsely claim that one monolithic command completed here. The deterministic release audit, embedded-bundle byte-integrity audit and embedded-engine scientific self-test also passed. Streamlit itself is health-checked in GitHub Actions after dependencies are installed; the local packaging environment used for this release did not have Streamlit installed, so no local runtime-health result is claimed.
+`pytest --collect-only` reports **96 tests**. The final validated batches cover all 96 tests; the reconstruction file is split into two invocations only to stay below the execution harness limit. Every collected test passed. A single long `pytest -q` invocation exceeds the execution harness time limit, so the release audit does not falsely claim that one monolithic command completed here. The deterministic release audit, embedded-bundle byte-integrity audit and embedded-engine scientific self-test also passed. Streamlit itself is health-checked in GitHub Actions after dependencies are installed; the local packaging environment used for this release did not have Streamlit installed, so no local runtime-health result is claimed.
 
 
 ## 21. Notation/symbol completeness validation
@@ -247,3 +247,14 @@ python research_selftest.py
 The final release treats notation as part of scientific reproducibility. Automated tests require every registered equation to have explicit symbol definitions, units/scales and operator metadata; every primary lattice input to have a visible meaning and unit; every core output to have a notation entry; and every equation-provenance export to carry its symbol/operator dictionary. The Streamlit equation helper renders those definitions immediately beside the displayed relation.
 
 The UI additionally exposes a plain-language acronym/crystallographic-notation legend and labels plot axes with physical names and units rather than raw internal column names wherever a technical quantity is plotted.
+
+
+## Transformation-matched synthetic parent reconstruction validation
+
+The built-in two-parent validation dataset is now generated from the **exact OR matrix and parent/daughter symmetry groups currently selected in the UI**. This closes a validation loophole in which a KS FCC→BCC synthetic dataset could previously be reconstructed under a different transformation such as NiTi B2→B19′. The numerical reconstruction algorithms themselves were not changed.
+
+Known-truth validation no longer uses majority-remapped cluster accuracy as a primary metric because that quantity can report 100% for pathological singleton over-segmentation. The academic workbench instead reports: **Adjusted Rand Index (ARI), homogeneity, completeness, V-measure, parent-count error, singleton-parent fraction, fragmentation per true parent, and adjacency-boundary precision/recall/F1/Jaccard/false-boundary rate**.
+
+A dedicated regression test encodes the former failure mode: two true parents split into 12 singleton reconstructed parents must produce truth ARI = 0, poor completeness, boundary precision = 1/15 and boundary F1 = 0.125 rather than being presented as a correct reconstruction. A transformation-matched CT/Otsuka–Ren NiTi synthetic benchmark with 6 daughters per parent and 0.35° noise recovers exactly two parents with truth ARI = 1, completeness = 1, homogeneity = 1 and boundary F1 = 1 for the tested graph, variant-graph and operator/groupoid routes.
+
+Cross-method ARI/NMI remain in the software, but are explicitly labelled **agreement, not accuracy**. Near-zero OR residual and high heuristic support are also explicitly guarded against when most reconstructed parents are singletons, because a singleton can trivially fit its own best candidate.

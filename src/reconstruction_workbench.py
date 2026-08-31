@@ -47,11 +47,11 @@ from src.reconstruction import (
     orientation_relationship_presets,
     orientations_from_dataframe,
     quaternion_wxyz,
-    reconstruction_accuracy_against_labels,
     refine_orientation_relationship,
     rotation_from_parallelisms,
     symmetry_group,
     synthetic_parent_reconstruction_demo,
+    synthetic_parent_reconstruction_demo_from_or,
     unique_child_variants,
     variant_graph_reconstruction,
 )
@@ -75,6 +75,7 @@ from src.core import C_A_TO_M, C_M_TO_A
 
 from src.reconstruction_academic import (
     academic_export_zip,
+    known_truth_validation_metrics,
     boundary_consensus_table,
     build_agreement_summary,
     operator_edge_table,
@@ -675,11 +676,53 @@ def _comparison_table(
             "runtime_s": float(runtimes.get(name, np.nan)),
         }
         if truth is not None:
-            row["known_truth_clustering_accuracy"] = float(reconstruction_accuracy_against_labels(r, truth))
-            row["known_truth_ARI"] = float(adjusted_rand_score(np.asarray(truth), pids))
+            tv = known_truth_validation_metrics(r, truth, edges)
+            row.update({
+                "truth_status": tv["validation_status"],
+                "expected_parents": tv["expected_parent_count"],
+                "truth_ARI": tv["truth_ARI"],
+                "truth_completeness": tv["truth_completeness"],
+                "truth_homogeneity": tv["truth_homogeneity"],
+                "truth_V_measure": tv["truth_V_measure"],
+                "truth_boundary_precision": tv["truth_boundary_precision"],
+                "truth_boundary_recall": tv["truth_boundary_recall"],
+                "truth_boundary_F1": tv["truth_boundary_F1"],
+                "false_parent_boundary_rate": tv["false_parent_boundary_rate"],
+                "fragments_per_true_parent_mean": tv["mean_reconstructed_fragments_per_true_parent"],
+            })
         rows.append(row)
     return pd.DataFrame(rows)
 
+
+
+def _comparison_display_table(comp: pd.DataFrame) -> pd.DataFrame:
+    """Human-readable UI labels; canonical machine columns remain in downloads."""
+    rename = {
+        "method": "Method",
+        "truth_status": "Known-truth verdict",
+        "expected_parents": "True parents",
+        "reconstructed_parents": "Reconstructed parents",
+        "singleton_parent_fraction_pct": "Singleton parents (%)",
+        "mean_OR_fit_deg": "Mean OR residual (°)",
+        "median_OR_fit_deg": "Median OR residual (°)",
+        "p95_OR_fit_deg": "P95 OR residual (°)",
+        "fraction_OR_fit_gt5deg_pct": "OR residual >5° (%)",
+        "mean_support_score": "Mean heuristic support",
+        "low_support_fraction_pct": "Low-support daughters (%)",
+        "prior_parent_boundary_edges": "Called parent-boundary edges",
+        "prior_parent_boundary_fraction_pct": "Called boundary edges (%)",
+        "truth_ARI": "Truth ARI",
+        "truth_completeness": "Truth completeness",
+        "truth_homogeneity": "Truth homogeneity",
+        "truth_V_measure": "Truth V-measure",
+        "truth_boundary_precision": "Boundary precision",
+        "truth_boundary_recall": "Boundary recall",
+        "truth_boundary_F1": "Boundary F1",
+        "false_parent_boundary_rate": "False-boundary rate",
+        "fragments_per_true_parent_mean": "Fragments / true parent",
+        "runtime_s": "Runtime (s)",
+    }
+    return comp.rename(columns={k:v for k,v in rename.items() if k in comp.columns})
 
 def _agreement_matrix(results: dict[str, ReconstructionResult]) -> pd.DataFrame:
     names = list(results)
@@ -879,7 +922,12 @@ def _manual_adjacency_editor(grain_ids: list[int], key: str) -> pd.DataFrame:
     return st.data_editor(default, num_rows="dynamic", use_container_width=True, key=key)
 
 
-def _prepare_dataset(child_sym: tuple[np.ndarray, ...]) -> PreparedDataset | None:
+def _prepare_dataset(
+    or_name: str,
+    r_child_to_parent: np.ndarray,
+    parent_sym: tuple[np.ndarray, ...],
+    child_sym: tuple[np.ndarray, ...],
+) -> PreparedDataset | None:
     st.subheader("2 · Load and audit the measured daughter microstructure")
     st.caption(
         "The reconstruction engines work on daughter **grains**, not raw pixels. Choose a route that matches what you actually have. "
@@ -910,12 +958,18 @@ def _prepare_dataset(child_sym: tuple[np.ndarray, ...]) -> PreparedDataset | Non
             min_value=0.0, max_value=3.0, value=0.35, step=0.05,
             help="Random angular perturbation applied to the synthetic daughter orientations."
         )
-        preset_name = "Kurdjumov–Sachs (FCC parent → BCC child)"
-        df, edges, _ = synthetic_parent_reconstruction_demo(preset_name, int(n), float(noise), seed=11)
-        st.success("Known truth: exactly two prior-parent grains. This mode is for checking the pipeline before analyzing experimental data.")
+        df, edges, _ = synthetic_parent_reconstruction_demo_from_or(
+            r_child_to_parent, parent_sym, child_sym, int(n), float(noise), seed=11
+        )
+        st.success(
+            "Known truth: exactly two prior-parent grains. The synthetic daughters are generated with the SAME selected OR and parent/daughter symmetries shown in Step 1, so this is a transformation-matched pipeline validation."
+        )
+        st.caption(f"Synthetic crystallography used to generate truth: {or_name}. This prevents an FCC→BCC validation dataset from being accidentally judged with a NiTi B2→B19′ model (or vice versa).")
         return PreparedDataset(
             "built-in validation", df, edges, convention,
-            "synthetic two-parent validation dataset", "measured/shared-boundary synthetic graph", "arbitrary", "true_parent_id is validation truth"
+            f"synthetic two-parent validation generated from selected OR: {or_name}",
+            "known/shared-boundary synthetic graph", "arbitrary",
+            "true_parent_id is validation truth; true_parent_boundary marks the deliberately inserted inter-parent edge"
         )
 
     if mode == "Manual grain table":
@@ -1276,6 +1330,49 @@ def _run_one(
     return operator_groupoid_reconstruction(grain_ids, child_orientations, edges, r_or, child_sym, parent_sym, operator_tol_deg=c["operator_tol_deg"], parent_consistency_deg=c["parent_consistency_deg"])
 
 
+
+def _parent_summary_display(df: pd.DataFrame) -> pd.DataFrame:
+    rename = {
+        "parent_id": "Parent ID",
+        "supporting_daughter_grains": "Supporting daughters",
+        "distinct_selected_variants": "Distinct selected variants",
+        "dominant_variant_id": "Dominant variant ID",
+        "dominant_variant_fraction_pct": "Dominant variant (%)",
+        "supporting_area": "Supporting area",
+        "area_fraction_pct": "Area fraction (%)",
+        "mean_OR_fit_deg": "Mean OR residual (°)",
+        "median_OR_fit_deg": "Median OR residual (°)",
+        "p95_OR_fit_deg": "P95 OR residual (°)",
+        "max_OR_fit_deg": "Max OR residual (°)",
+        "mean_candidate_separation_deg": "Mean candidate separation (°)",
+        "mean_support_score": "Mean heuristic support",
+        "minimum_support_score": "Minimum heuristic support",
+        "ambiguous_daughter_grains": "Ambiguous daughters",
+        "parent_phi1_deg": "Parent φ₁ (°)",
+        "parent_Phi_deg": "Parent Φ (°)",
+        "parent_phi2_deg": "Parent φ₂ (°)",
+    }
+    out = df.rename(columns={k:v for k,v in rename.items() if k in df.columns}).copy()
+    return out
+
+
+def _daughter_assignment_display(df: pd.DataFrame) -> pd.DataFrame:
+    rename = {
+        "grain_id": "Daughter grain ID",
+        "parent_id": "Reconstructed parent ID",
+        "candidate_variant_id": "Candidate variant ID",
+        "best_OR_fit_deg": "Best OR residual (°)",
+        "second_best_candidate_fit_deg": "2nd-best candidate residual (°)",
+        "candidate_separation_deg": "Candidate separation (°)",
+        "candidate_count": "Candidate count",
+        "absolute_fit_support_0_to_1": "Absolute-fit support (0–1)",
+        "candidate_separation_support_0_to_1": "Separation support (0–1)",
+        "support_score_0_to_1": "Heuristic support (0–1)",
+        "quality_flag": "Review flag",
+        "x": "x", "y": "y",
+    }
+    return df.rename(columns={k:v for k,v in rename.items() if k in df.columns}).copy()
+
 def _render_result(
     name: str,
     result: ReconstructionResult,
@@ -1295,15 +1392,19 @@ def _render_result(
     assignments = _assignment_table(result, source_df)
     q = reconstruction_quality_summary(result)
 
-    m1, m2, m3, m4, m5 = st.columns(5)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("Prior parents", int(result.diagnostics["n_reconstructed_parents"]))
-    m2.metric("Mean OR residual", f"{float(np.mean(result.fit_deg)):.3f}°")
-    m3.metric("P95 OR residual", f"{float(np.quantile(result.fit_deg, 0.95)):.3f}°")
-    m4.metric("Fit ≤2.5°", f"{100*float(q['fraction_fit_le_2_5deg']):.1f}%")
-    m5.metric("Mean support", f"{float(np.mean(result.confidence)):.3f}")
+    m2.metric("Singleton parents", f"{100*float(q['singleton_parent_fraction']):.1f}%")
+    m3.metric("Mean OR residual", f"{float(np.mean(result.fit_deg)):.3f}°")
+    m4.metric("P95 OR residual", f"{float(np.quantile(result.fit_deg, 0.95)):.3f}°")
+    m5.metric("Fit ≤2.5°", f"{100*float(q['fraction_fit_le_2_5deg']):.1f}%")
+    m6.metric("Mean support", f"{float(np.mean(result.confidence)):.3f}")
+    if float(q["singleton_parent_fraction"]) > 0.50:
+        st.error("Structural warning: more than half of reconstructed parents contain only one daughter grain. Near-zero OR residuals can then be trivial self-fits and must not be interpreted as a successful parent reconstruction.")
     st.caption(
         "OR residual = angular disagreement between the reconstructed parent orientation and the best crystallographically allowed parent candidate for a daughter grain. "
-        "Support = a 0–1 **heuristic** combining absolute fit and separation from the next candidate; it is not a posterior probability."
+        "Support = a 0–1 heuristic combining absolute fit and separation from the next candidate; it is not a posterior probability. "
+        f"Overall interpretation: {q['interpretation']}."
     )
 
     t1, t2, t3, t4, t5 = st.tabs([
@@ -1311,7 +1412,7 @@ def _render_result(
     ])
     with t1:
         st.markdown("**One row = one reconstructed prior-parent grain.** This is normally the table to cite/report first.")
-        st.dataframe(parent_summary, use_container_width=True, hide_index=True)
+        st.dataframe(_parent_summary_display(parent_summary), use_container_width=True, hide_index=True)
         st.caption(
             "Key fields: supporting_daughter_grains = independent daughter-grain evidence count; distinct_selected_variants = selected crystallographic candidate diversity; "
             "mean/median/P95/max OR fit = residual distribution in degrees; candidate separation = ambiguity against the next candidate; quality_flag is descriptive, not a theorem."
@@ -1340,7 +1441,7 @@ def _render_result(
             key=f"quality_filter_{name}",
         )
         view = assignments[assignments["quality_flag"].isin(qfilter)]
-        st.dataframe(view, use_container_width=True, hide_index=True)
+        st.dataframe(_daughter_assignment_display(view), use_container_width=True, hide_index=True)
         st.caption(
             "best_OR_fit_deg = best candidate-to-parent angular residual. second_best_candidate_fit_deg and candidate_separation_deg expose ambiguity. "
             "candidate_variant_id is an internal symmetry-generated candidate index unless a transformation-specific canonical packet/Bain/variant mapping is supplied."
@@ -1450,7 +1551,7 @@ def render_reconstruction_workbench() -> None:
     with tab_recon:
         # OR is needed before raw EBSD segmentation because segmentation uses daughter symmetry.
         or_name, preset, initial_or, parent_sym, child_sym = _render_or_builder("main")
-        ds = _prepare_dataset(child_sym)
+        ds = _prepare_dataset(or_name, initial_or, parent_sym, child_sym)
         if ds is None:
             return
 
@@ -1542,16 +1643,47 @@ def render_reconstruction_workbench() -> None:
             results = None
             comp = None
         if results and comp is not None:
-            st.subheader("5 · Compare the reconstruction evidence — no opaque winner score")
-            st.dataframe(comp, use_container_width=True, hide_index=True)
+            st.subheader("5 · Validate first, then compare methods")
+            truth = ds.grains["true_parent_id"].to_numpy() if "true_parent_id" in ds.grains.columns else None
+            truth_validation_df = None
+            if truth is not None:
+                st.markdown("### A · Known-truth validation — this outranks cross-method agreement")
+                truth_rows = []
+                for method_name, rr in results.items():
+                    tv = known_truth_validation_metrics(rr, truth, edges)
+                    truth_rows.append({"method": method_name, **tv})
+                truth_validation_df = pd.DataFrame(truth_rows)
+                vcols = [
+                    "method", "validation_status", "expected_parent_count", "reconstructed_parent_count",
+                    "truth_ARI", "truth_homogeneity", "truth_completeness", "truth_V_measure",
+                    "truth_boundary_precision", "truth_boundary_recall", "truth_boundary_F1",
+                    "false_parent_boundary_rate", "singleton_parent_fraction",
+                    "mean_reconstructed_fragments_per_true_parent",
+                ]
+                st.dataframe(truth_validation_df[vcols], use_container_width=True, hide_index=True)
+                st.caption(
+                    "ARI is chance-adjusted partition recovery. Homogeneity penalizes merging different true parents. Completeness penalizes fragmenting one true parent into many reconstructed parents. "
+                    "V-measure balances homogeneity/completeness. Boundary precision asks whether called parent boundaries are truly boundaries; recall asks whether true boundaries were found; F1 balances both. "
+                    "The PASS/REVIEW/FAIL label is a transparent synthetic-software checklist (ARI≥0.95, homogeneity/completeness≥0.95, boundary F1≥0.90, exact parent count, ≤10% singleton parents), not a universal experimental acceptance law."
+                )
+                if any(str(x).startswith("FAIL") for x in truth_validation_df["validation_status"]):
+                    st.error("At least one method does NOT recover the known synthetic truth. Do not interpret near-zero OR residuals, high heuristic support, or method-to-method agreement as proof of a correct parent reconstruction.")
+                elif all(str(x).startswith("PASS") for x in truth_validation_df["validation_status"]):
+                    st.success("All selected methods recover the known synthetic truth under the currently selected crystallography and noise level.")
+
+            st.markdown("### B · Method evidence table")
+            st.dataframe(_comparison_display_table(comp), use_container_width=True, hide_index=True)
             st.caption(
-                "Read across the table: a defensible reconstruction should avoid large OR residual tails, excessive low-support daughters, pathological singleton-parent splitting, and unstable prior-parent boundaries. "
-                "Runtime is computational information, not scientific quality. If known truth exists, truth metrics are shown explicitly."
+                "Read across the table. Low OR residual is only an internal fit diagnostic: a singleton parent can have an almost-zero residual trivially. "
+                "A defensible reconstruction should also avoid singleton splitting, recover sensible boundaries, remain stable across methods/thresholds, and agree with independent truth or retained-parent evidence when available. Runtime is not scientific quality."
             )
 
             agreement = None
             consensus = None
             if len(results) > 1:
+                st.markdown("### C · Cross-method agreement — agreement is not accuracy")
+                if truth is not None:
+                    st.info("When known truth exists, use the truth table above to judge accuracy. ARI/NMI below only ask whether algorithms agree with EACH OTHER; several methods can agree perfectly on the same wrong partition.")
                 agreement = build_agreement_summary(results, edges, parent_sym)
                 consensus = boundary_consensus_table(results, edges, grain_ids)
                 ctab1, ctab2, ctab3, ctab4 = st.tabs([
@@ -1624,6 +1756,9 @@ def render_reconstruction_workbench() -> None:
                 "controls": controls,
                 "daughter_grains": int(len(grain_ids)),
                 "adjacency_pairs": int(len(edges)),
+                "known_truth_available": bool(truth is not None),
+                "known_truth_primary_metrics": "ARI, homogeneity, completeness, V-measure, boundary precision/recall/F1" if truth is not None else None,
+                "cross_method_agreement_warning": "ARI/NMI between methods measure agreement, not truth accuracy",
                 "support_score_status": "deterministic heuristic, not calibrated probability",
                 "variant_id_status": "internal symmetry-generated candidate ID unless an external canonical mapping is supplied",
             }
@@ -1633,19 +1768,20 @@ def render_reconstruction_workbench() -> None:
                 f"Orientation convention: {ds.convention}\nParent symmetry: {preset.parent_symmetry}\nDaughter symmetry: {preset.child_symmetry}\n"
                 f"Orientation relationship: {or_name}\nMethods: {', '.join(results.keys())}\nControls: {json.dumps(controls, sort_keys=True)}\n\n"
                 "Interpretation rules: OR residuals are angular internal-consistency diagnostics; the 0–1 support value is heuristic and is not a probability. "
-                "Variant IDs are internal candidate IDs unless a canonical transformation-specific mapping is supplied. Cross-method ARI/NMI compare clustering, boundary Jaccard compares prior-parent boundary calls, and matched-parent orientation disagreement compares recovered parent orientations after overlap-based matching.\n"
+                "Variant IDs are internal candidate IDs unless a canonical transformation-specific mapping is supplied. When known truth exists, truth ARI/homogeneity/completeness/V-measure and boundary precision/recall/F1 are the primary validation evidence. Cross-method ARI/NMI measure agreement, not accuracy; boundary Jaccard compares prior-parent boundary calls, and matched-parent orientation disagreement compares recovered parent orientations after overlap-based matching.\n"
             )
             bundle = academic_export_zip(
                 source_df=ds.grains, adjacency_df=ds.adjacency, results=results, comparison=comp,
                 agreement=agreement, parent_tables=parent_tables, daughter_tables=daughter_tables,
                 variant_tables=variant_tables, operator_tables=operator_tables or None,
                 metadata=metadata, methods_text=methods_text, boundary_consensus=consensus,
+                truth_validation=truth_validation_df,
             )
             st.download_button(
                 "Download complete reconstruction evidence ZIP", bundle,
                 "parent_daughter_reconstruction_evidence.zip", "application/zip", use_container_width=True
             )
-            st.caption("The ZIP contains the analyzed input grains/adjacency, exact OR matrix, all method controls, comparison matrices, parent summaries, daughter assignments, variant statistics, operator statistics when applicable, and machine-readable metadata.")
+            st.caption("The ZIP contains the analyzed input grains/adjacency, exact OR matrix, all method controls, comparison matrices, parent summaries, daughter assignments, variant/operator statistics, and machine-readable metadata. When synthetic/known truth exists it also contains validation/known_truth_metrics.csv with ARI, homogeneity, completeness, V-measure and boundary precision/recall/F1.")
 
     with tab_cycle:
         st.subheader("Round-trip crystallography: measured B19′ → reconstructed B2 → regenerated B19′")

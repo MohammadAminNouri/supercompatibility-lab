@@ -1,12 +1,12 @@
 # Final release manifest
 
-**Build ID:** `2026-08-31-final-ct-otsuka-reconstruction-ui`
+**Build ID:** `2026-08-31-final-truth-valid-reconstruction`
 
 **Recommended Streamlit entrypoint:** `supercompatibility_final.py`
 
 ## Scientific release checks completed before packaging
 
-- 93/93 collected automated tests passed in validated batches after the CT/Otsuka–Ren and UI additions.
+- 96/96 collected automated tests passed in validated batches after the CT/Otsuka–Ren and UI additions.
 - Equation/source parity audit passed.
 - Deployment preflight passed.
 - Embedded-engine scientific self-test passed.
@@ -34,8 +34,16 @@ Use:
 - Main file path: `supercompatibility_final.py`
 - Python: `3.12`
 
-The visible build identifier must be `2026-08-31-final-ct-otsuka-reconstruction-ui`.
+The visible build identifier must be `2026-08-31-final-truth-valid-reconstruction`.
 
 ## Environment note
 
 The packaging container used for this release does not provide the Streamlit browser runtime. GitHub Actions installs the pinned Streamlit dependency and requires the `/_stcore/health` endpoint to pass before CI is green.
+
+
+## Reconstruction truth-validation hardening
+
+- Built-in synthetic daughter data are generated from the **currently selected OR and parent/daughter symmetries**; no hidden KS/FCC→BCC dataset is reused for NiTi CT/Otsuka–Ren validation.
+- Known-truth validation uses **Adjusted Rand Index (ARI), homogeneity, completeness, V-measure, and parent-boundary precision/recall/F1**. The legacy majority-remapped clustering accuracy is not used in the academic workbench because singleton over-segmentation can make it falsely equal 100%.
+- Cross-method ARI/NMI are explicitly labelled as **agreement, not accuracy**.
+- Detailed method evidence reports singleton-parent fraction and warns when low OR residuals are trivial singleton self-fits.

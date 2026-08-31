@@ -242,6 +242,11 @@ def parent_summary_table(result: ReconstructionResult, source_df: pd.DataFrame) 
 
 
 def method_comparison_row(result: ReconstructionResult, runtime_s: float, source_df: pd.DataFrame | None = None, validation_accuracy: float | None = None) -> dict:
+    """Legacy compact row helper.
+
+    ``validation_accuracy`` is retained for API compatibility only and is not used by the
+    academic workbench because majority-mapped cluster accuracy can hide fragmentation.
+    """
     fit = np.asarray(result.fit_deg, float)
     support = np.asarray(result.confidence, float)
     row = {
@@ -263,19 +268,27 @@ def method_comparison_row(result: ReconstructionResult, runtime_s: float, source
 def reconstruction_quality_summary(result: ReconstructionResult) -> dict[str, float | int | str]:
     fit = np.asarray(result.fit_deg, float)
     support = np.asarray(result.confidence, float)
+    _, counts = np.unique(np.asarray(result.parent_ids, int), return_counts=True)
+    singleton_fraction = float(np.mean(counts == 1)) if len(counts) else np.nan
+    fit_good = bool(np.mean(fit <= 2.5) >= 0.9 and np.mean(support < 0.45) <= 0.1)
+    pathological_split = bool(np.isfinite(singleton_fraction) and singleton_fraction > 0.50)
+    if pathological_split:
+        interpretation = "pathological over-segmentation risk: many reconstructed parents are singletons; low OR residual alone is not evidence of a correct parent partition"
+    elif fit_good:
+        interpretation = "strong internal OR consistency; still validate parent partition with boundaries, cross-method evidence or independent truth"
+    else:
+        interpretation = "mixed internal consistency; inspect weak grains, thresholds and prior-parent boundaries"
     return {
         "daughter_grains": int(len(fit)),
         "reconstructed_parents": int(result.diagnostics["n_reconstructed_parents"]),
+        "singleton_parent_fraction": singleton_fraction,
         "mean_fit_deg": float(np.mean(fit)),
         "p95_fit_deg": float(np.percentile(fit, 95)),
         "fraction_fit_le_2_5deg": float(np.mean(fit <= 2.5)),
         "fraction_fit_gt_5deg": float(np.mean(fit > 5.0)),
         "mean_support": float(np.mean(support)),
         "fraction_support_lt_0_45": float(np.mean(support < 0.45)),
-        "interpretation": (
-            "strong internal consistency" if np.mean(fit <= 2.5) >= 0.9 and np.mean(support < 0.45) <= 0.1
-            else "mixed consistency; inspect weak grains and boundaries"
-        ),
+        "interpretation": interpretation,
     }
 
 

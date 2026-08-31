@@ -2,7 +2,7 @@
 
 Release audit date: 2026-08-31
 
-Build identifier: `2026-08-31-final-ct-otsuka-reconstruction-ui`
+Build identifier: `2026-08-31-final-truth-valid-reconstruction`
 
 Recommended Streamlit entrypoint: `supercompatibility_final.py`
 
@@ -14,7 +14,7 @@ Collection check:
 python -m pytest --collect-only -q
 ```
 
-Result: **93 tests collected**. Because the execution harness imposes a time limit on long single commands, the complete suite was executed in deterministic batches. All **93/93 tests passed**; the reconstruction module was split into a fast 8-test batch plus its one heavier multi-preset test.
+Result: **96 tests collected**. Because the execution harness imposes a time limit on long single commands, the complete suite was executed in deterministic batches. All **96/96 tests passed**; the reconstruction module was split into a fast 8-test batch plus its one heavier multi-preset test.
 
 Coverage includes the metric/CMC/SMC engine, PTMC/cofactor cross-checks, analytical source-equation parity, Type-I/Type-II/Compound domain classification, symmetry/cosets/double cosets, independent compatibility methods, temperature evaluation, uncertainty propagation, inverse design, ML screening, multi-step transformations, five parent/daughter reconstruction families, OR refinement, robust ANG/CTF import, raw-point segmentation, academic reconstruction comparison/export, metric-aware NiTi B2↔B19′ cycle regeneration and later-cycle matching, reproducibility export and notation/symbol completeness.
 
@@ -61,3 +61,12 @@ Passing these checks establishes internal numerical consistency and reproduction
 ## CT/Otsuka–Ren reconstruction addition
 
 The parent/daughter workbench preserves all previous ORs and reconstruction methods and adds a dedicated NiTi CT/Otsuka–Ren route. The source-derived B2/B19′ correspondence and metrics are kept distinct from the software bridge that obtains a model-derived starting OR by polar decomposition. The UI exposes this caveat, the exact correspondence matrices and the resulting rotation/stretches. Top-level navigation is grouped into four academic workspaces without removing any prior workflow.
+
+
+### Known-truth reconstruction hardening
+
+- Selected-OR/symmetry-matched synthetic generation: PASS.
+- CT/Otsuka–Ren two-parent synthetic recovery: PASS (truth ARI/completeness/homogeneity/boundary F1 = 1.000 in dedicated regression tests).
+- Singleton over-segmentation counterexample: PASS (truth ARI = 0 and boundary F1 = 0.125; no false 100% academic accuracy).
+- Cross-method agreement-vs-accuracy warning: present in UI and exports.
+- Academic evidence ZIP includes `validation/known_truth_metrics.csv` when truth labels are available.

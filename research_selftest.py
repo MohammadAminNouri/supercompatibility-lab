@@ -78,13 +78,13 @@ def main() -> None:
         operator_groupoid_reconstruction,
         orientation_relationship_presets,
         orientations_from_dataframe,
-        reconstruction_accuracy_against_labels,
         symmetry_group,
         synthetic_parent_reconstruction_demo,
         unique_child_variants,
         variant_graph_reconstruction,
     )
     from src.symmetry import stretch_variants
+    from src.reconstruction_academic import known_truth_validation_metrics
 
     # 1) Published binary NiTi metric/PTMC benchmark.
     binary = LatticeInput(3.01, 2.898, 4.108, 4.646, 97.78)
@@ -171,14 +171,14 @@ def main() -> None:
     reconstruction_rows = []
     for fn in methods:
         r = fn(gids, ori, edges, ks.matrix_child_to_parent, cs, ps)
-        acc = reconstruction_accuracy_against_labels(r, df.true_parent_id.to_numpy())
+        tv = known_truth_validation_metrics(r, df.true_parent_id.to_numpy(), edges)
         nparents = int(r.diagnostics["n_reconstructed_parents"])
         mean_fit = float(r.diagnostics["mean_fit_deg"])
-        if acc < 0.99 or nparents != 2:
+        if tv["truth_ARI"] < 0.99 or tv["truth_completeness"] < 0.99 or tv["truth_boundary_F1"] < 0.99 or nparents != 2:
             raise AssertionError(
-                f"{r.method}: parents={nparents}, accuracy={acc:.3f}; expected 2 parents and >=0.99"
+                f"{r.method}: parents={nparents}, truth_ARI={tv['truth_ARI']:.3f}, completeness={tv['truth_completeness']:.3f}, boundary_F1={tv['truth_boundary_F1']:.3f}; expected exact two-parent recovery"
             )
-        reconstruction_rows.append((r.method, nparents, acc, mean_fit))
+        reconstruction_rows.append((r.method, nparents, float(tv["truth_ARI"]), float(tv["truth_completeness"]), float(tv["truth_boundary_F1"]), mean_fit))
 
     print("SUPERCOMPATIBILITY LAB FINAL SCIENTIFIC SELF-TEST: PASS")
     print(f"extracted engine: {extracted}")
@@ -190,8 +190,8 @@ def main() -> None:
     print(f"C1 best epsilon: {c1_dash.best_epsilon:.9f}")
     print(f"CMC habit planes: {[np.asarray(p).round(6).tolist() for p in deg.habit_planes]}")
     print(f"max all-volume-fraction |sigma2-1|: {scan.max_middle_stretch_residual:.3e}")
-    for method, nparents, acc, mean_fit in reconstruction_rows:
-        print(f"reconstruction {method}: parents={nparents}, accuracy={acc:.3f}, mean_fit={mean_fit:.3f} deg")
+    for method, nparents, ari, completeness, boundary_f1, mean_fit in reconstruction_rows:
+        print(f"reconstruction {method}: parents={nparents}, truth_ARI={ari:.3f}, completeness={completeness:.3f}, boundary_F1={boundary_f1:.3f}, mean_fit={mean_fit:.3f} deg")
 
 
 if __name__ == "__main__":

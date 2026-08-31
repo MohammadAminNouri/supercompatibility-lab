@@ -22,13 +22,13 @@ from src.reconstruction import (
     operator_groupoid_reconstruction,
     orientation_relationship_presets,
     orientations_from_dataframe,
-    reconstruction_accuracy_against_labels,
     symmetry_group,
     synthetic_parent_reconstruction_demo,
     unique_child_variants,
     variant_graph_reconstruction,
 )
 from src.symmetry import stretch_variants
+from src.reconstruction_academic import known_truth_validation_metrics
 
 
 def main() -> None:
@@ -68,9 +68,11 @@ def main() -> None:
     print("Synthetic parent-reconstruction audit")
     for fn in funcs:
         r = fn(gids, ori, edges, p.matrix_child_to_parent, cs, ps)
-        acc = reconstruction_accuracy_against_labels(r, df.true_parent_id.to_numpy())
-        print(f"  {r.method}: parents={r.diagnostics['n_reconstructed_parents']}, accuracy={acc:.3f}, mean_fit={r.diagnostics['mean_fit_deg']:.3f} deg")
-        assert acc >= 0.99
+        tv = known_truth_validation_metrics(r, df.true_parent_id.to_numpy(), edges)
+        print(f"  {r.method}: parents={r.diagnostics['n_reconstructed_parents']}, truth_ARI={tv['truth_ARI']:.3f}, completeness={tv['truth_completeness']:.3f}, boundary_F1={tv['truth_boundary_F1']:.3f}, mean_fit={r.diagnostics['mean_fit_deg']:.3f} deg")
+        assert tv["truth_ARI"] >= 0.99
+        assert tv["truth_completeness"] >= 0.99
+        assert tv["truth_boundary_F1"] >= 0.99
         assert int(r.diagnostics["n_reconstructed_parents"]) == 2
 
     print("Release audit: PASS")

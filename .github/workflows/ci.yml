@@ -41,7 +41,7 @@ jobs:
         run: |
           test -f supercompatibility_final.py
           test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_final.py"
-          grep -q "2026-08-31-final-ct-otsuka-reconstruction-ui" supercompatibility_final.py
+          grep -q "2026-08-31-final-truth-valid-reconstruction" supercompatibility_final.py
 
       - name: Compile all Python
         run: python -m compileall -q supercompatibility_final.py app.py streamlit_app.py supercompatibility_r7.py src scripts tests
