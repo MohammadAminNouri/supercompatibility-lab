@@ -516,3 +516,22 @@ The app deliberately does not create a universal scalar “compatibility percent
 | Hadamard rank-one test | Is a supplied deformation-gradient jump planar-compatible? |
 
 A paper should report the individual residuals and applicability assumptions rather than replacing them by an invented score.
+
+
+## 19. Equation-level provenance architecture
+
+Every major mathematical output has a stable equation/method key in `src/provenance.py`. A record stores the displayed relation, source location, provenance class, physical meaning, implementation path, scope and caveat. The UI **Math used** expanders and the paper-ready CSV/JSON exports read from the same registry, preventing the documentation shown to a researcher from drifting away from the implementation metadata.
+
+The registered classes distinguish source equations, source-derived implementations, explicit source discrepancies, independent theorem implementations and software extensions. This distinction is part of the output and should be preserved in publications.
+
+## 20. Analytical/general parity
+
+For B2→B19′ the general matrix calculation and an independent analytical implementation are both available. The software computes the normalized closed-form CMC, its explicit quadratic polynomial and labeled eigenspectrum, then reports residuals against the generic metric/correspondence CMC and numerical eigenvalues. A manuscript may use the analytical formula, the generic engine, or both, but the parity residual should be retained when using the software as a numerical basis.
+
+Higher-order CMC degeneracies D1/D2/E and closed-form supercompatibility families are evaluated separately from numerical optimizers. Analytical output is never relabeled as an optimizer result, and an optimizer result is never relabeled as an analytical solution.
+
+## 21. Paper-ready computation record
+
+`src/reproducibility.py` serializes the exact research state needed to trace a numerical statement: physical input values and units, normalized ratios, correspondence matrices, tolerances, software/build metadata, matrices, principal stretches, CMC eigenvalues/habit planes, analytical cross-checks, compatibility-family residuals, equation provenance, source discrepancies and claim boundaries.
+
+The JSON is hashed with SHA-256. The hash fingerprints the exact record but does not establish scientific validity by itself. Scientific validity still depends on correct experimental inputs, appropriate theory applicability and external validation of any materials-performance claim.

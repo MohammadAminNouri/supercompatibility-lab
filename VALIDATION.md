@@ -188,4 +188,55 @@ These tests are intentionally theorem-level or synthetic checks. They do not rep
 
 ## 16. Current automated suite
 
-At the release documented here, `pytest -q` executes **43 tests** spanning the original metric/cofactor/twin engine, temperature, uncertainty, inverse/ML/multi-step utilities, reconstruction and the independent compatibility methods. The exact count may increase in later releases; CI is authoritative.
+At the final notation-explicit release documented here, `pytest -q` executes **63 tests** spanning the original metric/cofactor/twin engine, temperature, uncertainty, inverse/ML/multi-step utilities, reconstruction and the independent compatibility methods. The exact count may increase in later releases; CI is authoritative.
+
+
+## 17. Analytical equation-parity validation
+
+The final release includes an independent deterministic audit in `scripts/verify_equation_parity.py` plus pytest coverage. The release requires:
+
+- analytical B2/B19′ CMC matrix = general metric/correspondence CMC to <1e-13 Frobenius residual;
+- analytical CMC eigenvalues = numerical eigenspectrum to <1e-13;
+- explicit quadratic polynomial = `4 u^T CMC u`;
+- C1/C2a/C2b/C3 constructed family checkpoints;
+- D1/D2/E higher-degeneracy checkpoints;
+- Appendix-C beta=98° closed-form values and invariant-length relation;
+- explicit PTMC IPS reconstruction with rank-one and plane-invariance residuals <1e-12 on both branches;
+- left-coset partition `48 = 12 x 4`;
+- equation-provenance registry coverage.
+
+## 18. Source-discrepancy regression tests
+
+Three source inconsistencies are deliberately testable. The suite fails if the software silently erases them:
+
+1. analytical CMC `q3` uses the algebraically required plus branch and must match the printed CMC matrix eigenspectrum;
+2. C2b must expose both the analytical `b<=sqrt(2)` branch and the conflicting later table `b>=sqrt(2)` branch;
+3. the later `0.269706` distance value and the visually/parsed squared expression must remain separately reproducible.
+
+See `docs/SOURCE_DISCREPANCIES.md`.
+
+## 19. Paper-ready record validation
+
+Automated tests require the reproducibility record to remain JSON-readable and to include source DOI, build ID, equation provenance, claim boundaries and a SHA-256 fingerprint. The Markdown audit export is also tested for the presence of equation-provenance and claim-boundary sections.
+
+## 20. Release-gate commands
+
+The release was locally validated with:
+
+```bash
+python scripts/deployment_preflight.py
+python scripts/verify_equation_parity.py
+python -m pytest -q
+python scripts/verify_release.py
+python scripts/verify_embedded_app.py
+python research_selftest.py
+```
+
+Observed final result: **63 passed**. The deterministic release audit, embedded-bundle byte-integrity audit and embedded-engine scientific self-test also passed. Streamlit itself is health-checked in GitHub Actions after dependencies are installed; the local packaging environment used for this release did not have Streamlit installed, so no local runtime-health result is claimed.
+
+
+## 21. Notation/symbol completeness validation
+
+The final release treats notation as part of scientific reproducibility. Automated tests require every registered equation to have explicit symbol definitions, units/scales and operator metadata; every primary lattice input to have a visible meaning and unit; every core output to have a notation entry; and every equation-provenance export to carry its symbol/operator dictionary. The Streamlit equation helper renders those definitions immediately beside the displayed relation.
+
+The UI additionally exposes a plain-language acronym/crystallographic-notation legend and labels plot axes with physical names and units rather than raw internal column names wherever a technical quantity is plotted.

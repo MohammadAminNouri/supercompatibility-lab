@@ -1,7 +1,8 @@
-name: R6 Fast Sanity
+name: Final Fast Sanity
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -15,10 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Confirm correct entrypoint, not legacy app
+      - name: Confirm final entrypoint identity
         run: |
-          grep -q "2026-08-29-r6-fresh-repo" supercompatibility_r6.py
-          ! sed -n '1,20p' supercompatibility_r6.py | grep -q "from src.core import"
-          echo "R6 entrypoint identity PASS"
-      - name: Compile entrypoints
-        run: python -m py_compile supercompatibility_r6.py app.py streamlit_app.py
+          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_final.py"
+          grep -q "2026-08-31-final-notation-explicit" supercompatibility_final.py
+      - name: Compile final entrypoints and notation/equation modules
+        run: python -m py_compile supercompatibility_final.py app.py streamlit_app.py src/equation_engine.py src/provenance.py src/reproducibility.py src/symbols.py scripts/verify_equation_parity.py

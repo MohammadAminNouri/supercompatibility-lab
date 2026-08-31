@@ -36,7 +36,7 @@ def extract_engine() -> Path:
     modules = _literal_assignment(tree, "_EMBEDDED_MODULES")
     data = _literal_assignment(tree, "_EMBEDDED_DATA")
 
-    temp_root = Path(tempfile.mkdtemp(prefix="supercompatibility_r6_audit_"))
+    temp_root = Path(tempfile.mkdtemp(prefix="supercompatibility_final_audit_"))
     src_dir = temp_root / "src"
     data_dir = temp_root / "data"
     src_dir.mkdir(parents=True)
@@ -180,7 +180,7 @@ def main() -> None:
             )
         reconstruction_rows.append((r.method, nparents, acc, mean_fit))
 
-    print("SUPERCOMPATIBILITY LAB R6 SCIENTIFIC SELF-TEST: PASS")
+    print("SUPERCOMPATIBILITY LAB FINAL SCIENTIFIC SELF-TEST: PASS")
     print(f"extracted engine: {extracted}")
     print(f"binary ratios: {tuple(float(x) for x in binary.ratios())}")
     print(f"binary lambda2: {dash.lambda2:.10f}")

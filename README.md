@@ -1,6 +1,6 @@
 # Supercompatibility Lab
 
-A responsive **Streamlit research platform for martensitic compatibility, cofactor conditions, transformation twins, uncertainty, temperature dependence and inverse lattice design**.
+A responsive **Streamlit research platform for martensitic compatibility, cofactor conditions, transformation twins, analytical equation parity, uncertainty, temperature dependence, inverse design and paper-ready reproducibility**.
 
 The built-in reference transformation is **B2 austenite → B19′ martensite**. The software keeps several theoretical questions separate instead of collapsing them into one vague “compatibility score”:
 
@@ -10,7 +10,7 @@ The built-in reference transformation is **B2 austenite → B19′ martensite**.
 4. **Transformation-twin structure** — symmetry reduction, double cosets and full two-fold-generated twin exploration for the built-in transformation.
 5. **Research extensions** — temperature sweeps, XRD uncertainty propagation, literature benchmarks, microstructure metadata, elastocaloric/fatigue metrics, inverse design, user-trained composition→lattice ML, multi-step transformation chains and guarded frontier diagnostics.
 
-The project is designed so that **physics calculations live in `src/` and the Streamlit UI only orchestrates them**. Numerical claims are backed by automated tests and explicit tolerances.
+The project is designed so that **physics calculations live in `src/` and the Streamlit UI only orchestrates them**. The final release additionally binds every major result to an equation/method provenance record: displayed relation, source or extension class, source location, implementation path, scope/caveat, tolerance and reproducible export. Numerical claims are backed by automated tests, analytical/general parity checks and explicit tolerances.
 
 ---
 
@@ -48,6 +48,10 @@ The Streamlit interface has two layers:
 - **Research workspaces** — full matrices, twin/domain tables, temperature/uncertainty, reconstruction, inverse design, ML and theorem-level cross-checks.
 
 The B2/B19′ lattice input form is hidden automatically in the parent-reconstruction workspace because it is irrelevant there. Physical input labels use full phase/parameter names and display units; dimensionless graph or ratio controls are explicitly identified. Reconstruction also asks for the orientation-matrix direction convention instead of silently assuming that all EBSD exports use the same convention.
+
+**No-symbol-left-behind rule:** every mathematical symbol shown in the app is defined immediately beside the formula, input, output, or technical table where it appears. The same notation dictionary is embedded in paper-ready JSON/Markdown exports, so a result remains interpretable outside the UI.
+
+**Final validation:** 63/63 automated tests pass locally, plus equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
 
 ## Main workspaces
 
@@ -173,6 +177,26 @@ These methods answer different questions and are never collapsed into a fabricat
 
 The app reports stretch-variant and commutator diagnostics and includes a guarded implementation of current extreme-compatibility reference tensors. Those tensors are applied only when the transformation belongs to their stated crystallographic applicability class. For the built-in B2→B19′ correspondence, the monoclinic unique axis maps to a cubic `<110>` direction, so cubic→monoclinic-II extreme targets are **not** used as a pass/fail criterion.
 
+### 12. Equation explorer & analytical solutions
+
+A dedicated audit workspace exposes the actual mathematics behind the computed numbers rather than treating equations as hidden implementation details. It includes:
+
+- explicit PTMC IPS construction `v → R → F=RU=I+d m^T` with rank-one and plane-invariance residuals;
+- analytical B2/B19′ CMC and closed-form eigenspectrum cross-checked against the general metric engine;
+- C1/C2a/C2b/C3 and D1/D2/E degeneracy families;
+- source-defined distance calculations with discrepancy auditing;
+- left-coset correspondence variants, CMC zero-set symmetries and double-coset intercorrespondence classes;
+- closed-form O2 and Appendix-C O4 supercompatibility families;
+- searchable equation/method catalog with source, implementation and scope.
+
+Known source inconsistencies are surfaced instead of silently corrected. See `docs/SOURCE_DISCREPANCIES.md`.
+
+### 13. Paper-ready audit & export
+
+Creates a research record containing physical inputs and units, normalized ratios, correspondence matrices, numerical tolerances, software build, core matrices, principal stretches, CMC eigenvalues/habit planes, analytical parity residuals, equation provenance, source discrepancies and claim boundaries. Exports are available as JSON, Markdown and CSV and are fingerprinted with SHA-256.
+
+This is designed to make a Methods/Results calculation traceable; it does **not** turn crystallographic calculations into unsupported claims about fatigue, hysteresis, chemistry or experimental reversibility.
+
 ---
 
 ## Friendly physical input
@@ -228,6 +252,11 @@ GitHub Actions runs the same checks on pushes and pull requests.
 
 See:
 
+- [`docs/EQUATION_PROVENANCE.md`](docs/EQUATION_PROVENANCE.md) — equation keys, source/extension classes and implementation traceability
+- [`docs/NOTATION_GUIDE.md`](docs/NOTATION_GUIDE.md) — explicit meaning and units for every formula/input/output symbol
+- [`docs/SOURCE_DISCREPANCIES.md`](docs/SOURCE_DISCREPANCIES.md) — explicit register of source inconsistencies and implementation policy
+- [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — paper-ready record contract and minimum reporting fields
+- [`docs/PAPER_METHODS_TEMPLATE.md`](docs/PAPER_METHODS_TEMPLATE.md) — manuscript-methods checklist
 - [`docs/METHODS.md`](docs/METHODS.md) — equations, conventions and algorithmic details
 - [`docs/VALIDATION.md`](docs/VALIDATION.md) — benchmark philosophy and expected numerical checkpoints
 - [`docs/REFERENCES.md`](docs/REFERENCES.md) — primary literature and what each source supports
@@ -246,14 +275,14 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run supercompatibility_final.py
 ```
 
 ### Streamlit Community Cloud
 
 1. Upload this repository to GitHub.
 2. Create a Streamlit Community Cloud app from the repository.
-3. Set the entry point to `app.py`.
+3. Set the entry point to `supercompatibility_final.py`.
 4. Deploy. No secrets are required.
 
 ---
@@ -262,7 +291,10 @@ streamlit run app.py
 
 ```text
 supercompatibility-lab/
-├── app.py
+├── supercompatibility_final.py # recommended fresh self-contained Streamlit entrypoint
+├── supercompatibility_r7.py  # byte-identical compatibility fallback
+├── app.py                    # byte-identical self-contained fallback
+├── streamlit_app.py          # byte-identical self-contained fallback
 ├── src/
 │   ├── core.py              # metric correspondence, CMC, SMC, metric twins
 │   ├── ptmc.py              # stretch tensor and CC1–CC3

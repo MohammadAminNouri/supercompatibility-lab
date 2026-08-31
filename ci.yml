@@ -1,4 +1,4 @@
-name: R6 Scientific + Streamlit CI
+name: Final Scientific + Notation + Streamlit CI
 
 on:
   push:
@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: r6-ci-${{ github.ref }}
+  group: final-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,57 +29,64 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Install
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Verify fresh R6 entrypoint exists
+      - name: Deployment preflight
+        run: python scripts/deployment_preflight.py
+
+      - name: Verify final entrypoint identity
         run: |
-          test -f supercompatibility_r6.py
-          test -f app.py
-          test -f streamlit_app.py
-          grep -q "2026-08-29-r6-fresh-repo" supercompatibility_r6.py
-          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_r6.py"
+          test -f supercompatibility_final.py
+          test "$(cat STREAMLIT_ENTRYPOINT.txt)" = "supercompatibility_final.py"
+          grep -q "2026-08-31-final-notation-explicit" supercompatibility_final.py
 
-      - name: Compile
-        run: python -m compileall -q supercompatibility_r6.py app.py streamlit_app.py src scripts tests
+      - name: Compile all Python
+        run: python -m compileall -q supercompatibility_final.py app.py streamlit_app.py supercompatibility_r7.py src scripts tests
 
-      - name: Scientific self-test
+      - name: Equation and source parity audit
+        run: python scripts/verify_equation_parity.py
+
+      - name: Scientific self-test from embedded engine
         run: python research_selftest.py
 
-      - name: Full automated tests
+      - name: Full automated test suite
         run: python -m pytest -q
 
-      - name: Release verification
+      - name: Release numerical verification
         run: python scripts/verify_release.py
 
-      - name: Start Streamlit R6 and check health
+      - name: Embedded bundle integrity
+        run: python scripts/verify_embedded_app.py
+
+      - name: Start final Streamlit app and check health
         shell: bash
         run: |
           set -euo pipefail
-          python -m streamlit run supercompatibility_r6.py \
+          python -m streamlit run supercompatibility_final.py \
             --server.headless true \
             --server.address 127.0.0.1 \
             --server.port 8501 \
-            > streamlit-r6.log 2>&1 &
+            > streamlit-final.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
-          for i in {1..45}; do
+          for i in {1..60}; do
             if curl --fail --silent http://127.0.0.1:8501/_stcore/health | grep -qi ok; then
-              echo "R6 Streamlit health PASS"
+              echo "Final Streamlit health PASS"
               exit 0
             fi
             sleep 2
           done
-          echo "R6 Streamlit failed to start"
-          cat streamlit-r6.log
+          echo "Final Streamlit failed to start"
+          cat streamlit-final.log
           exit 1
 
       - name: Upload Streamlit log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: streamlit-r6-log
-          path: streamlit-r6.log
+          name: streamlit-final-log
+          path: streamlit-final.log
           if-no-files-found: ignore

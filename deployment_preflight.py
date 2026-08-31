@@ -10,11 +10,19 @@ if str(ROOT) not in sys.path:
 
 REQUIRED = [
     "app.py",
+    "streamlit_app.py",
+    "supercompatibility_r7.py",
+    "supercompatibility_final.py",
     "requirements.txt",
     "src/__init__.py",
     "src/core.py",
     "src/ptmc.py",
+    "src/equation_engine.py",
+    "src/provenance.py",
+    "src/reproducibility.py",
+    "src/symbols.py",
     "src/reconstruction.py",
+    "scripts/verify_equation_parity.py",
     ".streamlit/config.toml",
     ".github/workflows/ci.yml",
 ]
@@ -33,6 +41,10 @@ for module in (
     "src.compatibility_methods",
     "src.reconstruction",
     "src.design",
+    "src.equation_engine",
+    "src.provenance",
+    "src.reproducibility",
+    "src.symbols",
 ):
     importlib.import_module(module)
 
