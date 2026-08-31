@@ -1,349 +1,1193 @@
 # Supercompatibility Lab
 
-A responsive **Streamlit research platform for martensitic compatibility, cofactor conditions, transformation twins, analytical equation parity, uncertainty, temperature dependence, inverse design and paper-ready reproducibility**.
+**Supercompatibility Lab** is a research-oriented computational workbench for crystallographic compatibility, martensitic transformations, correspondence variants, transformation twinning, interaction work, EBSD parent–daughter reconstruction, inverse lattice design, uncertainty analysis, independent theoretical cross-checks, and reproducible manuscript reporting.
 
-The built-in reference transformation is **B2 austenite → B19′ martensite**. The software keeps several theoretical questions separate instead of collapsing them into one vague “compatibility score”:
+The principal implementation focuses on the **B2 ↔ B19′ martensitic transformation in NiTi**, while several modules support more general transformation-matrix and compatibility problems.
 
-1. **Single-variant austenite/martensite compatibility** — stretch condition \(\lambda_2=1\) and CMC degeneracy.
-2. **Classical cofactor supercompatibility** — full CC1–CC3 evaluation after classifying non-trivial systems as Type-I, Type-II or Compound domains.
-3. **Metric/correspondence intercompatibility** — CMC habit planes, SMC shear and the shear/shear mismatch \(\varepsilon\).
-4. **Transformation-twin structure** — symmetry reduction, double cosets and full two-fold-generated twin exploration for the built-in transformation.
-5. **Research extensions** — temperature sweeps, XRD uncertainty propagation, literature benchmarks, microstructure metadata, elastocaloric/fatigue metrics, inverse design, user-trained composition→lattice ML, multi-step transformation chains and guarded frontier diagnostics.
-
-The project is designed so that **physics calculations live in `src/` and the Streamlit UI only orchestrates them**. The final release additionally binds every major result to an equation/method provenance record: displayed relation, source or extension class, source location, implementation path, scope/caveat, tolerance and reproducible export. Numerical claims are backed by automated tests, analytical/general parity checks and explicit tolerances.
+The aim is to provide a single traceable research workflow in which lattice measurements, crystallographic theory, mechanical selection, reconstruction, numerical validation, and publication evidence remain connected without treating distinct theories as interchangeable.
 
 ---
 
-## Why this is more than a calculator
+## Scientific workflow
 
-The app is structured as a reproducible research workflow:
+For a typical NiTi study:
 
 ```text
-measured lattice parameters
-        ↓
-metrics + correspondence
-        ↓
-┌─────────────────────┬────────────────────────┐
-│ metric route        │ classical stretch route│
-│ CMC → habit plane   │ U → λ1, λ2, λ3         │
-│ SMC → A/M shear     │ CC1, CC2, CC3          │
-└─────────────────────┴────────────────────────┘
-        ↓                       ↓
-full symmetry/twin exploration + cross-checking
-        ↓
-explicit residuals / uncertainty / T-dependence
-        ↓
-inverse lattice design and data-driven screening
+Experimental lattice parameters
+        │
+        ▼
+Compatibility diagnosis
+        │
+        ├──────────► PTMC / cofactor verification
+        │
+        ▼
+Variants, operators and twins
+        │
+        ├──────────► Interaction Work
+        │
+        ├──────────► EBSD parent reconstruction
+        │
+        ▼
+Inverse lattice design
+        │
+        ▼
+Uncertainty / independent checks
+        │
+        ▼
+Manuscript audit and reproducible export
 ```
 
-The program **does not** assign an arbitrary “95% compatible” score. It reports physical residuals and inequality margins with units/definitions.
+At the lattice level:
+
+\[
+\text{lattice parameters}
+\rightarrow
+\text{metrics}
+\rightarrow
+\text{transformation matrices}
+\rightarrow
+\text{stretch/distortion tensors}
+\]
+
+At the compatibility level:
+
+\[
+\text{A/M compatibility}
+\rightarrow
+\text{M/M twinning}
+\rightarrow
+\text{A/M--M/M shear intercompatibility}
+\]
+
+At the variant level:
+
+\[
+\text{symmetry}
+\rightarrow
+\text{correspondence variants}
+\rightarrow
+\text{intervariant operators}
+\rightarrow
+\text{twin relations}
+\]
+
+At the mechanical level:
+
+\[
+\text{orientation}
++
+\text{stress}
++
+\text{deformation}
+\rightarrow
+\text{Interaction Work}
+\]
+
+At the experimental level:
+
+\[
+B19'
+\text{ EBSD}
+\rightarrow
+B2
+\text{ parent reconstruction}
+\rightarrow
+\text{variant identification}
+\]
+
+At the design level:
+
+\[
+\text{compatibility objective}
+\rightarrow
+\text{inverse lattice search}
+\rightarrow
+\text{candidate target metrics}
+\]
+
+These branches are deliberately kept distinct. Agreement between them can strengthen an interpretation; one method is not silently substituted for another.
 
 ---
 
-## UX design
+# Research workspaces
 
-The Streamlit interface has two layers:
+## 1 · Compatibility verdict & diagnostics
 
-- **Guided overview** — default learning/screening path that answers four questions in plain language before exposing residuals: single-variant A/M fit, CMC habit-plane fit, cofactor domain fit, and metric shear/shear fit.
-- **Research workspaces** — full matrices, twin/domain tables, temperature/uncertainty, reconstruction, inverse design, ML and theorem-level cross-checks.
+The first workspace provides the quickest quantitative assessment of the active lattice.
 
-The B2/B19′ lattice input form is hidden automatically in the parent-reconstruction workspace because it is irrelevant there. Physical input labels use full phase/parameter names and display units; dimensionless graph or ratio controls are explicitly identified. Reconstruction also asks for the orientation-matrix direction convention instead of silently assuming that all EBSD exports use the same convention.
+Typical outputs include:
 
-**No-symbol-left-behind rule:** every mathematical symbol shown in the app is defined immediately beside the formula, input, output, or technical table where it appears. The same notation dictionary is embedded in paper-ready JSON/Markdown exports, so a result remains interpretable outside the UI.
+- normalized lattice ratios;
+- transformation metrics;
+- principal stretch eigenvalues;
+- \(\lambda_2\);
+- \(|\lambda_2-1|\);
+- CMC eigenvalues;
+- normalized distance from exact CMC degeneracy;
+- existence or absence of an exact A/M habit-plane solution;
+- availability of downstream SMC and shear/shear calculations;
+- explicit numerical PASS / FAIL / BLOCKED criteria.
 
-**Final validation:** 96/96 automated tests pass across the complete suite when run in validated batches, including dedicated EBSD import/segmentation, academic reconstruction comparison and export tests. Equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits also pass. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
-
-**B19′ → B2 → B19′ cycle reconstruction:** the parent/daughter workspace can now reuse a completed B19′→B2 reconstruction and regenerate every symmetry-distinct B19′ orientation branch from each reconstructed B2 parent. It reports round-trip closure residuals, observed branch occupancy, branch-to-branch orientation-change matrices, and can match an independently measured later-cycle B19′ EBSD dataset. A metric-aware NiTi natural/AQ quick setup constructs the OR from `(010)B19′ ∥ (110)B2` and `[101]B19′ ∥ [−1 1 1]B2` using direct and reciprocal lattice metrics rather than treating monoclinic Miller indices as Cartesian vectors.
-
-**NiTi CT + Otsuka–Ren reconstruction bridge:** the reconstruction workspace now also exposes the source-derived B2/B19′ correspondence matrix and measured lattice metrics used by Correspondence Theory. Because correspondence is not itself a unique experimental orientation relationship, the app transparently forms a metric-aware correspondence deformation and uses its polar rotational factor only as a reproducible **model-derived starting OR**. The natural/AQ route, KS/NW/Bain/Pitsch/Burgers presets, custom parallelisms and custom OR matrix remain available unchanged. The parent/daughter home page is grouped into four academic workspaces: reconstruct parent, NiTi cycle, forward/batch, and academic guide.
-
-## Main workspaces
-
-### 1. Compatibility dashboard
-
-A compact view of:
-
-- \(\lambda_1,\lambda_2,\lambda_3\)
-- \(|\lambda_2-1|\)
-- CMC degeneracy distance
-- best normalized CC2 residual
-- CC3 margin
-- metric shear/shear mismatch \(\varepsilon\), when an exact CMC habit plane exists
-- explicit warning when the classical cofactor test and the metric shear/shear construction do not give the same certification
-- interactive 3D CMC zero surface
-
-### 2. PTMC / cofactor cross-check
-
-Implements the full nonlinear conditions
+A result is not reported only as a qualitative label. Paper-facing output is designed to retain:
 
 \[
-\mathrm{CC1}:\;\lambda_2=1
+\boxed{\text{value}}
+\qquad
+\boxed{\text{criterion}}
+\qquad
+\boxed{\text{residual}}
+\qquad
+\boxed{\text{interpretation}}
 \]
 
-\[
-\mathrm{CC2}:\;a\cdot U\,\operatorname{cof}(U^2-I)n=0
-\]
-
-\[
-\mathrm{CC3}:\;\operatorname{tr}(U^2)-\det(U^2)-\frac{|a|^2|n|^2}{4}-2\ge0.
-\]
-
-Non-trivial cubic two-fold generators are grouped by the symmetry-related stretch they produce. Singleton generators are evaluated as Type-I/Type-II domains; paired perpendicular generators are evaluated with the dedicated Compound-domain rank-one solutions. The exact CC2 value, a normalized CC2 residual, applicable simplified Type-I/II checks, and the CC3 margin are shown.
-
-### 3. Complete twin explorer
-
-For the built-in B2→B19′ correspondence:
-
-- full cubic parent point group: **48 operations**
-- correspondence intersection subgroup: **4 operations**
-- double-coset partition: **7 classes**
-- symmetry-equivalent two-fold generators are retained and labeled
-- Type-I and Type-II transformation-twin elements are calculated from correspondence, metrics and parent symmetry
-- compound twins are detected when the Type-I and Type-II descriptions coincide for the same intercorrespondence class
-- when CMC gives habit planes, every candidate is ranked by the metric shear/shear mismatch \(\varepsilon\)
-
-### 4. Temperature & uncertainty
-
-**Temperature sweep** accepts measured/fitted lattice parameters as a function of temperature and recomputes CMC/cofactor residuals row by row.
-
-**Uncertainty propagation** performs Monte Carlo propagation of user-supplied 1σ lattice-parameter uncertainties. Reported fractions mean **fraction of samples inside explicitly chosen tolerances**. They are not presented as the probability of satisfying an exact equality.
-
-### 5. Literature, microstructure & functional performance
-
-A curated database separates:
-
-- experimental benchmarks
-- mechanism studies
-- theory
-- data-driven design methods
-- device demonstrations
-
-Microstructure inputs—grain size, distribution, precipitates, retained martensite, dislocation density and processing—are stored alongside the exact geometry calculations. The app intentionally **does not fabricate a universal fatigue-life equation** from these descriptors.
-
-Optional functional measurements include transformation temperatures, thermal/stress hysteresis, \(\Delta T_{ad}\), COP, recoverable strain and cycle count.
-
-### 6. Inverse lattice design
-
-Differential-evolution and Latin-hypercube/Pareto search operate directly in normalized lattice space \((a,b,c,\beta)\). The objective is composed of explicit residuals:
-
-- \(|\lambda_2-1|\)
-- normalized CC2 residual
-- CC3 violation only
-- CMC degeneracy distance
-- optional proximity penalty to the starting alloy
-
-The objective weights are visible and user-controlled.
-
-### 7. Composition → lattice ML
-
-No universal pretrained model is shipped. Instead:
-
-1. upload a real composition/processing dataset;
-2. select numerical descriptors;
-3. cross-validate linear regression, random forest or extra-trees regression;
-4. inspect MAE/RMSE/\(R^2\) for every lattice target;
-5. predict candidate lattice parameters;
-6. pass the predicted lattices through the exact compatibility engine.
-
-This prevents a low predicted compatibility residual from being treated as meaningful when the lattice model itself is poorly validated.
-
-### 8. Multi-step transformations
-
-A generic metric/stretch engine accepts phase chains such as B2→R→B19′. Each stage has its own general triclinic unit cell and 3×3 correspondence matrix. The generic engine reports stagewise stretch eigenvalues and CMC distance.
-
-Full built-in twin classification is **not silently generalized** to arbitrary phase pairs; that requires a phase-specific symmetry/correspondence module.
-
-### 9. Parent ↔ daughter orientation reconstruction
-
-The reconstruction workbench accepts either pre-segmented daughter grains or raw `.ang` / `.ctf` / delimited EBSD point maps. Raw imports are audited before use: phase 0 is treated as non-indexed, the daughter phase is selected explicitly, vendor quality filters are optional and off by default, and the user must confirm the Euler/map reference-frame convention before segmentation. Small raw maps can be segmented in-app with explicit disorientation, minimum-point and spatial-neighbor controls; production-scale maps can instead supply externally segmented grains and measured adjacency.
-
-Five independently testable reconstruction routes can be run on the same data:
-
-- neighbor voting;
-- grain graph + Markov clustering;
-- candidate-level variant graph propagation;
-- nucleation + growth;
-- operator / groupoid consistency with per-edge operator IDs and residuals.
-
-A bounded OR-refinement routine can reduce neighbor inconsistency near a supplied physical OR. Built-in KS, NW, Bain, Pitsch and Burgers OR families provide symmetry-generated variants and forward parent→daughter prediction. The output now exposes best/second-best candidate residuals, candidate separation, heuristic support decomposition, parent-level variant diversity, operator frequencies and full parent orientations. Cross-method evidence includes ARI, NMI, prior-parent-boundary Jaccard agreement, overlap-matched parent-orientation disagreement and a boundary-consensus table. A one-click academic evidence ZIP exports the analyzed input, exact OR, all controls, per-method parent/daughter tables, variant/operator statistics and cross-method matrices. Approximate centroid k-NN adjacency remains available only as a visibly labelled fallback when true shared-boundary adjacency is unavailable. See `docs/RECONSTRUCTION.md`.
-
-### 10. Independent compatibility methods
-
-The app now cross-checks the main compatibility engine against additional exact or theorem-based diagnostics:
-
-- generic Hadamard rank-one jump condition;
-- single-variant Ball–James middle-stretch condition;
-- pairwise martensite-variant rank-one spectral criterion;
-- direct all-volume-fraction laminate singular-value scan;
-- cubic→orthorhombic triplet-condition residuals with an explicit applicability guard.
-
-These methods answer different questions and are never collapsed into a fabricated universal percentage score.
-
-### 11. Research frontier & methods
-
-The app reports stretch-variant and commutator diagnostics and includes a guarded implementation of current extreme-compatibility reference tensors. Those tensors are applied only when the transformation belongs to their stated crystallographic applicability class. For the built-in B2→B19′ correspondence, the monoclinic unique axis maps to a cubic `<110>` direction, so cubic→monoclinic-II extreme targets are **not** used as a pass/fail criterion.
-
-### 12. Equation explorer & analytical solutions
-
-A dedicated audit workspace exposes the actual mathematics behind the computed numbers rather than treating equations as hidden implementation details. It includes:
-
-- explicit PTMC IPS construction `v → R → F=RU=I+d m^T` with rank-one and plane-invariance residuals;
-- analytical B2/B19′ CMC and closed-form eigenspectrum cross-checked against the general metric engine;
-- C1/C2a/C2b/C3 and D1/D2/E degeneracy families;
-- source-defined distance calculations with discrepancy auditing;
-- left-coset correspondence variants, CMC zero-set symmetries and double-coset intercorrespondence classes;
-- closed-form O2 and Appendix-C O4 supercompatibility families;
-- searchable equation/method catalog with source, implementation and scope.
-
-Known source inconsistencies are surfaced instead of silently corrected. See `docs/SOURCE_DISCREPANCIES.md`.
-
-### 13. Paper-ready audit & export
-
-Creates a research record containing physical inputs and units, normalized ratios, correspondence matrices, numerical tolerances, software build, core matrices, principal stretches, CMC eigenvalues/habit planes, analytical parity residuals, equation provenance, source discrepancies and claim boundaries. Exports are available as JSON, Markdown and CSV and are fingerprinted with SHA-256.
-
-This is designed to make a Methods/Results calculation traceable; it does **not** turn crystallographic calculations into unsupported claims about fatigue, hysteresis, chemistry or experimental reversibility.
+This workspace is a diagnostic summary. Detailed theory remains available in the specialized workspaces.
 
 ---
 
-## Friendly physical input
+## 2 · Classical PTMC / cofactor verification
 
-The primary UI requests real unit-cell quantities with full names and units:
+This workspace independently evaluates the classical stretch-tensor and cofactor-condition framework.
 
-| Input | Unit | Meaning |
-|---|---:|---|
-| B2 austenite lattice parameter — `a_B2` | Å | cubic parent cell edge |
-| B19′ martensite lattice parameter — `a_B19′` | Å | martensite a-axis |
-| B19′ martensite lattice parameter — `b_B19′` | Å | martensite b-axis |
-| B19′ martensite lattice parameter — `c_B19′` | Å | martensite c-axis |
-| B19′ monoclinic angle — `β` | ° | angle between martensite a- and c-axes |
+For the transformation stretch tensor
 
-Normalized \(a,b,c\) ratios are calculated internally and shown as outputs, not ambiguous input symbols.
+\[
+U,
+\]
+
+the ordered principal stretches are
+
+\[
+\lambda_1 \leq \lambda_2 \leq \lambda_3.
+\]
+
+A central compatibility quantity is
+
+\[
+|\lambda_2-1|.
+\]
+
+Applicable Type-I, Type-II and compound twin domains are then evaluated through the individual cofactor conditions.
+
+The software keeps:
+
+- CC1;
+- CC2;
+- CC3;
+
+separate.
+
+A domain is not declared to satisfy the tested cofactor framework unless every required condition satisfies its declared numerical criterion.
+
+Raw matrices and complete domain tables are available for audit but are not required in the main workflow.
 
 ---
 
-## Reproducibility and validation
+## 3 · Variants, twins & Interaction Work
 
-The current test suite checks:
+This workspace links crystallographic variant theory, transformation twins, A/M–M/M compatibility, and mechanical variant selection.
 
-- published B2/B19′ normalized lattice ratios;
-- CMC matrices and degeneracy;
-- first-order habit-plane solutions;
-- SMC shear vectors;
-- transformation-twin shear amplitudes;
-- metric shear/shear \(\varepsilon\) and angles;
-- construction of \(U\) and \(\lambda_2\);
-- classical Type-I/Type-II/Compound cofactor conditions;
-- the deliberate cross-framework discrepancy in a C1 teaching benchmark;
-- cubic symmetry-group size, correspondence subgroup and double-coset partition;
-- temperature evaluation;
-- zero-uncertainty Monte Carlo behavior;
-- generic multi-step stretch equivalence;
-- frontier applicability guard;
-- user-trained ML and physics screening;
-- integrity of the curated literature database;
-- ideal KS/NW/Bain/Pitsch/Burgers variant counts;
-- five-method synthetic parent-reconstruction accuracy and OR refinement;
-- Hadamard rank-one diagnostics and pairwise stretch-variant compatibility;
-- direct all-volume-fraction cofactor verification;
-- exact constructed triplet-condition benchmarks.
+### Correspondence variants
 
-Run:
+The B2 parent symmetry is reduced by the correspondence subgroup.
+
+For the implemented NiTi correspondence:
+
+\[
+N_C^M
+=
+\frac{|G^A|}{|H_C^A|}
+=
+12.
+\]
+
+The software therefore produces twelve B19′ correspondence variants.
+
+The user can inspect an explicit pair:
+
+\[
+V_i \leftrightarrow V_j.
+\]
+
+### Intercorrespondence operators
+
+Variant relationships are grouped into symmetry-equivalent operator classes through double-coset decomposition.
+
+For a selected pair, the application reports:
+
+- operator class;
+- mirror content;
+- 180° rotational content;
+- Type-I twin capability;
+- Type-II twin capability;
+- complete \(V_i\rightarrow V_j\) operator map when requested;
+- reduced multivalued operator-composition table.
+
+The full group-theoretical matrices are retained for audit but remain secondary to the physical interpretation.
+
+### Transformation twins
+
+For an applicable variant relationship the application can calculate M/M twin solutions including:
+
+- Type I;
+- Type II;
+- compound-equivalent cases.
+
+For each selected solution the program distinguishes explicitly between:
+
+- parent symmetry generator;
+- calculated twin shear direction;
+- calculated twin-plane normal;
+- shear magnitude;
+- B2-coordinate representation;
+- B19′ crystallographic representation where justified;
+- class-representative geometry;
+- pair-specific information.
+
+A parent mirror or twofold generator is not automatically presented as if it were the conventional martensite twin-plane indexing.
+
+### Supercompatibility bridge
+
+The logical dependency is:
+
+\[
+\boxed{\text{A/M compatibility}}
+\]
+
+\[
+\downarrow
+\]
+
+\[
+\boxed{\text{A/M habit plane and shear}}
+\]
+
+\[
+\downarrow
+\]
+
+\[
+\boxed{\text{M/M twin compatibility}}
+\]
+
+\[
+\downarrow
+\]
+
+\[
+\boxed{\text{A/M--M/M shear matching}}
+\]
+
+\[
+\downarrow
+\]
+
+\[
+\boxed{\text{supercompatibility verdict}}
+\]
+
+If the exact A/M prerequisite does not exist, the final shear/shear quantity is reported as **NOT COMPUTED**, together with the reason. No artificial value is generated.
+
+### Interaction Work
+
+Interaction Work evaluates the mechanical work provided by an external stress to a declared martensitic deformation:
+
+\[
+IW
+=
+\boldsymbol{\sigma}:\boldsymbol{\varepsilon}.
+\]
+
+The deformation strain is defined as
+
+\[
+\boldsymbol{\varepsilon}
+=
+F-I.
+\]
+
+For martensite reorientation from an initial state \(i\) to a destination state \(j\),
+
+\[
+F_{i\rightarrow j}
+=
+F_jF_i^{-1},
+\]
+
+hence
+
+\[
+\varepsilon_{i\rightarrow j}
+=
+F_jF_i^{-1}-I.
+\]
+
+The software evaluates
+
+\[
+IW_{i\rightarrow j}
+\]
+
+for all candidate destination states and reports the maximum-work candidate.
+
+Inputs can include:
+
+- tension or compression;
+- stress magnitude;
+- parent crystallographic loading direction;
+- specimen loading direction;
+- B2 orientation;
+- Bunge Euler angles;
+- initial martensite state.
+
+When an EBSD-derived parent orientation is supplied, the stress/loading representation is transformed consistently between specimen and crystal coordinates.
+
+Interaction Work is a **mechanical selection criterion**.
+
+It is not treated as:
+
+- proof of transformation occurrence;
+- a complete kinetic law;
+- proof of supercompatibility;
+- a replacement for an activation-energy model.
+
+---
+
+## 4 · Temperature & measurement uncertainty
+
+This workspace addresses temperature dependence and uncertainty in experimental lattice measurements.
+
+### Temperature dependence
+
+Temperature-dependent lattice data can be supplied to evaluate quantities such as:
+
+\[
+|\lambda_2(T)-1|
+\]
+
+and
+
+\[
+\delta_{\mathrm{CMC}}(T).
+\]
+
+Outputs can include:
+
+- supplied temperature range;
+- temperature giving minimum \(|\lambda_2-1|\);
+- temperature giving minimum CMC distance;
+- rows satisfying declared compatibility criteria;
+- compatibility trends across the experimental range.
+
+The application does not invent temperature dependence if it is absent from the supplied dataset.
+
+### Measurement uncertainty
+
+Monte-Carlo propagation can be performed using declared uncertainties in:
+
+\[
+a_{B2},
+\quad
+a_{B19'},
+\quad
+b_{B19'},
+\quad
+c_{B19'},
+\quad
+\beta.
+\]
+
+Typical outputs include:
+
+- valid sample count;
+- \(|\lambda_2-1|\) distribution;
+- CMC-distance distribution;
+- quantiles;
+- fraction satisfying a declared tolerance.
+
+The reported fraction describes the supplied measurement/uncertainty model. It is not a universal probability that the material is compatible.
+
+---
+
+## 5 · Experimental context & literature
+
+Crystallographic compatibility is only one part of martensitic materials behavior.
+
+This workspace stores experimental information such as:
+
+- composition;
+- processing route;
+- heat treatment;
+- grain size;
+- precipitates;
+- texture;
+- dislocation state;
+- transformation temperatures;
+- thermal hysteresis;
+- mechanical hysteresis;
+- fatigue cycles;
+- functional degradation;
+- experimental notes.
+
+This information is retained as experimental evidence.
+
+The application does not invent deterministic fatigue, hysteresis, or performance laws from crystallographic compatibility alone.
+
+Literature records can be compared with the active study without mixing reported experimental observations with software predictions.
+
+---
+
+## 6 · Inverse lattice design
+
+The inverse-design workspace asks:
+
+> Which lattice parameters would move the current system toward a selected compatibility condition?
+
+The optimizer may vary:
+
+\[
+a_{B19'},
+\quad
+b_{B19'},
+\quad
+c_{B19'},
+\quad
+\beta
+\]
+
+within explicit user-defined bounds.
+
+Objectives can emphasize:
+
+- middle-eigenvalue compatibility;
+- CMC;
+- cofactor conditions;
+- combinations of compatibility residuals.
+
+Outputs include:
+
+- original lattice;
+- optimized target lattice;
+- absolute parameter changes;
+- percentage changes;
+- normalized lattice ratios;
+- \(|\lambda_2-1|\);
+- cofactor diagnostics;
+- CMC diagnostics;
+- Pareto trade-offs when requested.
+
+An optimized result is a **mathematical lattice target**.
+
+It is not automatically a realizable alloy composition.
+
+Experimental/compositional feasibility must be assessed independently.
+
+---
+
+## 7 · Composition → lattice modelling
+
+This workspace connects empirical composition/processing datasets to the crystallographic physics engine.
+
+A training dataset may contain:
+
+- elemental concentrations;
+- processing variables;
+- heat-treatment descriptors;
+- measured B2 lattice parameters;
+- measured B19′ lattice parameters;
+- measured monoclinic angle.
+
+The workflow is:
+
+```text
+composition / processing data
+        ↓
+cross-validated predictive model
+        ↓
+predicted lattice parameters
+        ↓
+compatibility calculations
+        ↓
+candidate screening
+```
+
+Model quality is evaluated **before** compatibility screening.
+
+The application reports metrics such as cross-validation error and \(R^2\). Weak or negative predictive performance is flagged explicitly.
+
+Compatibility calculations cannot convert an unreliable regression model into a reliable composition prediction.
+
+No universal NiTi composition→lattice law is assumed.
+
+---
+
+## 8 · Multi-step transformations
+
+This workspace supports transformation sequences containing intermediate phases, for example:
+
+\[
+A\rightarrow B\rightarrow C.
+\]
+
+For each transformation step the user supplies the required phase/cell and correspondence information.
+
+Per-stage outputs can include:
+
+- transformation matrices;
+- stretch tensors;
+- principal stretches;
+- \(|\lambda_2-1|\);
+- CMC diagnostics where mathematically applicable.
+
+Generic transformation stages are not automatically assigned NiTi-specific twin systems or monoclinic B19′ formulas.
+
+Applicability is kept explicit.
+
+---
+
+## 9 · EBSD parent ↔ daughter reconstruction
+
+This workspace reconstructs parent grains from measured daughter-phase EBSD data.
+
+For the principal NiTi use case:
+
+\[
+B19'
+\rightarrow
+B2.
+\]
+
+The reconstruction workflow is conceptually:
+
+```text
+measured B19′ orientations
+        ↓
+daughter-grain segmentation
+        ↓
+daughter adjacency
+        ↓
+theoretical variant/operator relations
+        ↓
+parent clustering
+        ↓
+reconstructed B2 grains
+        ↓
+reconstructed B2 orientations
+        ↓
+daughter variant assignments
+```
+
+Depending on the selected reconstruction strategy, outputs may include:
+
+- reconstructed parent ID;
+- reconstructed parent orientation;
+- daughter→parent assignment;
+- candidate variant;
+- OR residual;
+- second-best residual;
+- candidate separation;
+- support score;
+- review flag;
+- variant statistics;
+- operator statistics;
+- parent summaries.
+
+### Known-truth validation
+
+When truth labels are available, reconstruction is assessed using metrics such as:
+
+- Adjusted Rand Index;
+- normalized mutual information;
+- homogeneity;
+- completeness;
+- V-measure;
+- reconstructed-parent count;
+- singleton-parent fraction;
+- fragments per true parent;
+- boundary precision;
+- boundary recall;
+- boundary F1;
+- boundary Jaccard;
+- false-parent-boundary rate.
+
+A small OR residual is not treated as proof of successful parent reconstruction.
+
+Likewise:
+
+\[
+\boxed{\text{method agreement}}
+\neq
+\boxed{\text{accuracy}}.
+\]
+
+Cross-method agreement and truth-referenced validation remain separate.
+
+---
+
+## 10 · Independent theorem cross-checks
+
+This workspace evaluates selected conclusions through additional mathematical frameworks.
+
+Every method is labeled by applicability.
+
+Possible classifications include:
+
+- applicable to the current NiTi transformation;
+- generic matrix-level condition;
+- specialized for another transformation class;
+- data-dependent.
+
+Available checks can include:
+
+- variant-pair spectral compatibility;
+- laminate/all-volume-fraction tests;
+- specialized triplet conditions where applicable;
+- generic Hadamard rank-one jump diagnostics.
+
+A theorem derived for another crystal-transformation class is not silently presented as a B2→B19′ NiTi result.
+
+---
+
+## 11 · Applicability, references & methods
+
+This workspace acts as the methodological map of the application.
+
+It answers:
+
+- Which method applies?
+- What inputs are required?
+- What physical/mathematical question does it answer?
+- What can be concluded?
+- What cannot be concluded?
+- Is the method lattice-level, variant-level, mechanical, reconstruction-level, or empirical?
+- Which literature source/equation supports it?
+
+This workspace is intended to assist the preparation of manuscript **Methods** sections and to reduce accidental overclaiming.
+
+---
+
+## 12 · Equation & analytical solution library
+
+The equation library exposes the mathematics used throughout the application.
+
+It includes, where available:
+
+- metric tensors;
+- normalized lattice relations;
+- transformation/stretch relations;
+- CMC equations;
+- IPS relations;
+- habit-plane formulas;
+- cofactor conditions;
+- twin equations;
+- correspondence groups;
+- left cosets;
+- double cosets;
+- operator relations;
+- analytical compatibility families;
+- supercompatibility equations;
+- inverse-design equations.
+
+Symbols are defined beside the equations whenever practical.
+
+Where an independent analytical result exists, the software can compare it with the general numerical implementation.
+
+These parity checks form part of the software validation strategy.
+
+---
+
+## 13 · Manuscript audit & reproducible export
+
+The final workspace is the publication/reproducibility checkpoint.
+
+It records what was actually calculated.
+
+The audit may contain:
+
+- lattice inputs;
+- units;
+- normalized ratios;
+- temperature;
+- uncertainty assumptions;
+- numerical tolerances;
+- selected correspondence;
+- selected variant/operator/twin;
+- loading/orientation inputs;
+- equations used;
+- numerical residuals;
+- PASS / FAIL / BLOCKED criteria;
+- applicability restrictions;
+- source discrepancies;
+- reconstruction settings;
+- optimization settings;
+- software build;
+- record hash.
+
+A complete evidence bundle can be exported for manuscript preparation, supplementary information, or internal archiving.
+
+Depending on the analyses performed during the session, the archive may contain:
+
+```text
+study metadata
+compatibility diagnostics
+analytical checks
+variant/operator results
+twin results
+Interaction Work results
+temperature results
+Monte-Carlo uncertainty results
+inverse-design target
+Pareto scan
+ML model/screening results
+multi-step calculations
+reconstruction results
+microstructure record
+functional-performance record
+equation provenance
+references
+software/build metadata
+SHA-256 fingerprints
+```
+
+The export is intended to make later reproduction of the analysis possible.
+
+---
+
+# NiTi input convention
+
+The principal NiTi lattice input consists of:
+
+\[
+a_{B2}
+\]
+
+for cubic B2 austenite, and:
+
+\[
+a_{B19'},
+\quad
+b_{B19'},
+\quad
+c_{B19'},
+\quad
+\beta
+\]
+
+for monoclinic B19′ martensite.
+
+Lengths are entered in ångström:
+
+\[
+1\text{ Å}=10^{-10}\text{ m}.
+\]
+
+The monoclinic angle \(\beta\) is entered in degrees and converted internally where necessary.
+
+Normalized quantities used by analytical theory are derived from the physical lattice values.
+
+They are not treated as independent experimental inputs.
+
+---
+
+# Compatibility concepts
+
+Several related but distinct compatibility concepts occur in martensitic-transformation theory.
+
+The application does not treat them as synonyms.
+
+## Middle-eigenvalue condition
+
+A commonly used compatibility condition is:
+
+\[
+\lambda_2=1.
+\]
+
+The software therefore reports:
+
+\[
+|\lambda_2-1|.
+\]
+
+A small middle-eigenvalue residual is important, but it is not automatically sufficient for every stronger cofactor or supercompatibility theorem.
+
+## CMC
+
+The compatibility matrix condition is evaluated through its matrix/eigenvalue formulation.
+
+Exact compatibility requires the relevant zero-eigenvalue degeneracy.
+
+The application reports:
+
+- all CMC eigenvalues;
+- closest eigenvalue to zero;
+- normalized zero-set distance;
+- numerical tolerance;
+- resulting status.
+
+A `FAIL` therefore retains a quantitative measure of how far the lattice lies from the exact condition.
+
+## SMC
+
+Once the required A/M compatibility solution exists, the secondary construction supplies the corresponding shear/interface geometry used in later intercompatibility analysis.
+
+SMC is not evaluated as if its prerequisite existed when CMC fails.
+
+## Cofactor conditions
+
+CC1, CC2 and CC3 are evaluated independently.
+
+Passing CC1 alone does not imply that the complete tested cofactor conditions have been satisfied.
+
+## Shear/shear intercompatibility
+
+The final transformation-supercompatibility check compares the A/M shear geometry with an M/M twin shear.
+
+The calculation is only performed when its mathematical prerequisites have been satisfied.
+
+---
+
+# Numerical tolerances
+
+Floating-point calculations cannot establish literal symbolic equality.
+
+Every numerical classification therefore depends on a declared tolerance.
+
+Paper-facing results should retain:
+
+- raw quantity;
+- residual;
+- normalization;
+- tolerance;
+- status.
+
+Changing a tolerance changes the numerical classification criterion.
+
+Tolerance values should therefore be archived with the calculation.
+
+Default software tolerances are numerical defaults, not universal experimental limits.
+
+---
+
+# Interpretation and claim boundaries
+
+The application deliberately separates mathematical calculations from broader physical conclusions.
+
+## Compatibility calculations do not automatically predict
+
+- low hysteresis;
+- fatigue resistance;
+- reversibility;
+- transformation temperature;
+- microstructural stability;
+- functional life;
+- experimentally realizable composition.
+
+## A twin solution does not automatically prove
+
+- that the twin will form experimentally;
+- that it is kinetically preferred;
+- that A/M compatibility exists;
+- that full supercompatibility exists.
+
+## A high Interaction Work does not automatically prove
+
+- transformation occurrence;
+- fastest kinetics;
+- lowest total activation barrier;
+- full crystallographic compatibility.
+
+## A low reconstruction OR residual does not automatically prove
+
+- correct parent clustering;
+- correct parent count;
+- correct boundaries;
+- absence of fragmentation;
+- agreement with known truth.
+
+## A machine-learning prediction does not automatically prove
+
+- physical realizability;
+- reliable extrapolation;
+- compatibility of a real alloy.
+
+These claim boundaries should also be respected in publications using software-generated results.
+
+---
+
+# Installation
+
+Clone the repository:
 
 ```bash
-pip install -r requirements-dev.txt
-pytest -q
+git clone <repository-url>
+cd supercompatibility-lab
 ```
 
-GitHub Actions runs the same checks on pushes and pull requests.
-
-See:
-
-- [`docs/EQUATION_PROVENANCE.md`](docs/EQUATION_PROVENANCE.md) — equation keys, source/extension classes and implementation traceability
-- [`docs/NOTATION_GUIDE.md`](docs/NOTATION_GUIDE.md) — explicit meaning and units for every formula/input/output symbol
-- [`docs/SOURCE_DISCREPANCIES.md`](docs/SOURCE_DISCREPANCIES.md) — explicit register of source inconsistencies and implementation policy
-- [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — paper-ready record contract and minimum reporting fields
-- [`docs/PAPER_METHODS_TEMPLATE.md`](docs/PAPER_METHODS_TEMPLATE.md) — manuscript-methods checklist
-- [`docs/METHODS.md`](docs/METHODS.md) — equations, conventions and algorithmic details
-- [`docs/VALIDATION.md`](docs/VALIDATION.md) — benchmark philosophy and expected numerical checkpoints
-- [`docs/REFERENCES.md`](docs/REFERENCES.md) — primary literature and what each source supports
-- [`docs/PAPER_WORKFLOW.md`](docs/PAPER_WORKFLOW.md) — a defensible workflow for a research study
-- [`docs/DATA_SCHEMA.md`](docs/DATA_SCHEMA.md) — CSV schemas and units
-- [`docs/RECONSTRUCTION.md`](docs/RECONSTRUCTION.md) — orientation conventions, OR families and parent-reconstruction algorithms
-
----
-
-## Install and run
-
-Recommended: Python 3.12.
+Create an environment:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-streamlit run supercompatibility_final.py
 ```
 
-### Streamlit Community Cloud
+Activate on Linux/macOS:
 
-1. Upload this repository to GitHub.
-2. Create a Streamlit Community Cloud app from the repository.
-3. Set the entry point to `supercompatibility_final.py`.
-4. Deploy. No secrets are required.
+```bash
+source .venv/bin/activate
+```
+
+Activate on Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+For development/testing:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
 
 ---
 
-## Repository structure
+# Running the application
+
+Primary entrypoint:
+
+```bash
+python -m streamlit run supercompatibility_final.py
+```
+
+The repository also maintains deterministic self-contained Streamlit entrypoints used by deployment/release verification.
+
+These entrypoints are expected to remain synchronized according to the repository tests.
+
+---
+
+# Testing and release verification
+
+Run the full regression suite:
+
+```bash
+python -m pytest -q
+```
+
+Additional verification scripts may include:
+
+```bash
+python scripts/deployment_preflight.py
+python scripts/verify_embedded_app.py
+python scripts/verify_equation_parity.py
+python scripts/verify_release.py
+python research_selftest.py
+```
+
+These checks address different failure modes.
+
+## Deployment preflight
+
+Checks deployment/package consistency.
+
+## Embedded-app verification
+
+Checks the embedded self-contained research engine and deterministic entrypoints.
+
+## Equation parity
+
+Checks selected analytical and numerical implementations against one another.
+
+## Release verification
+
+Checks repository/release structure and required assets.
+
+## Scientific self-test
+
+Runs numerical sanity checks on the scientific engine.
+
+## Pytest
+
+Runs the complete regression and policy suite.
+
+A release is not considered validated merely because the Streamlit UI opens.
+
+---
+
+# Repository structure
+
+The repository is organized around self-contained deployment entrypoints, scientific validation scripts, data assets, and tests.
+
+A typical structure is:
 
 ```text
 supercompatibility-lab/
-├── supercompatibility_final.py # recommended fresh self-contained Streamlit entrypoint
-├── supercompatibility_r7.py  # byte-identical compatibility fallback
-├── app.py                    # byte-identical self-contained fallback
-├── streamlit_app.py          # byte-identical self-contained fallback
-├── src/
-│   ├── core.py              # metric correspondence, CMC, SMC, metric twins
-│   ├── ptmc.py              # stretch tensor and CC1–CC3
-│   ├── symmetry.py          # point groups, double cosets, full twin explorer
-│   ├── distances.py         # compatibility residual dashboard
-│   ├── temperature.py       # temperature-series evaluation
-│   ├── uncertainty.py       # Monte Carlo error propagation
-│   ├── literature.py        # curated literature loader
-│   ├── microstructure.py    # evidence-linked context, no fake fatigue model
-│   ├── performance.py       # optional measured functional metrics
-│   ├── design.py            # inverse and Pareto lattice design
-│   ├── ml.py                # user-trained composition→lattice ML
-│   ├── multistep.py         # general stage-wise metric/stretch engine
-│   ├── frontier.py          # guarded extreme-compatibility diagnostics
-│   ├── reconstruction.py    # parent/daughter ORs and five reconstruction methods
-│   ├── compatibility_methods.py # independent rank-one, all-f and triplet checks
-│   ├── presets.py
-│   └── visualization.py
-├── data/
-├── docs/
-├── scripts/
-├── tests/
-├── .github/workflows/tests.yml
+│
+├── app.py
+├── streamlit_app.py
+├── supercompatibility_r7.py
+├── supercompatibility_final.py
+│
 ├── requirements.txt
-└── requirements-dev.txt
+├── requirements-dev.txt
+├── research_selftest.py
+│
+├── scripts/
+│   ├── deployment_preflight.py
+│   ├── verify_embedded_app.py
+│   ├── verify_equation_parity.py
+│   └── verify_release.py
+│
+├── data/
+│   ├── templates
+│   ├── demonstration datasets
+│   └── research assets
+│
+├── tests/
+│   └── regression and release tests
+│
+└── README.md
 ```
 
 ---
 
-## Scientific scope and non-claims
+# Reproducibility
 
-This software is intended for **research screening, reproducible analysis and hypothesis generation**. It does not claim that crystallographic supercompatibility alone determines fatigue life, hysteresis, elastocaloric performance or synthesizability. Those outcomes also depend on microstructure, defects, processing, kinetics, loading and other material-specific factors.
+For publication-quality work, record at minimum:
 
-Likewise, equality conditions such as \(\lambda_2=1\), CC2=0 and \(\varepsilon=0\) are exact mathematical statements. Experimental and floating-point calculations require tolerances; the software exposes those tolerances rather than hiding them.
+- Git commit hash;
+- software/build identifier;
+- complete lattice input;
+- units;
+- temperature;
+- uncertainty model where relevant;
+- correspondence convention;
+- symmetry convention;
+- selected variant;
+- selected operator;
+- selected twin;
+- loading direction;
+- stress magnitude and sign;
+- orientation convention;
+- numerical tolerances;
+- optimization bounds;
+- ML dataset/version where relevant;
+- reconstruction parameters;
+- equation/source identifiers;
+- exported evidence archive.
 
-## License
+For long-term reproducibility, archive the evidence ZIP together with the exact Git commit used to create it.
 
-MIT — see [`LICENSE`](LICENSE).
+---
 
+# Literature basis
 
-## Reconstruction truth-validation hardening
+The implementation is based on published crystallographic and martensitic-transformation theory.
 
-- Built-in synthetic daughter data are generated from the **currently selected OR and parent/daughter symmetries**; no hidden KS/FCC→BCC dataset is reused for NiTi CT/Otsuka–Ren validation.
-- Known-truth validation uses **Adjusted Rand Index (ARI), homogeneity, completeness, V-measure, and parent-boundary precision/recall/F1**. The legacy majority-remapped clustering accuracy is not used in the academic workbench because singleton over-segmentation can make it falsely equal 100%.
-- Cross-method ARI/NMI are explicitly labelled as **agreement, not accuracy**.
-- Detailed method evidence reports singleton-parent fraction and warns when low OR residuals are trivial singleton self-fits.
+Important references include:
+
+## Correspondence theory for NiTi
+
+**The Correspondence Theory and Its Application to NiTi Shape Memory Alloys**  
+*Crystals* 12 (2022) 130  
+DOI: `10.3390/cryst12020130`
+
+## NiTi martensite reorientation and EBSD
+
+**An investigation on reorientation and textural evolution in a martensitic NiTi rolled sheet using EBSD**  
+*International Journal of Plasticity* 159 (2022) 103468  
+DOI: `10.1016/j.ijplas.2022.103468`
+
+## Interaction Work
+
+**The role of interaction work in martensite deformation**  
+*Scripta Materialia* 256 (2025) 116433  
+DOI: `10.1016/j.scriptamat.2024.116433`
+
+## Correspondence/metric/symmetry supercompatibility
+
+**Compatibilities and supercompatibility conditions in shape memory alloys determined from correspondence, metrics and symmetries**  
+*Acta Materialia* 316 (2026) 122399  
+DOI: `10.1016/j.actamat.2026.122399`
+
+## Orientational variants and operator/groupoid methodology
+
+**GenOVa: a computer program to generate orientational variants**  
+*Journal of Applied Crystallography* 40 (2007) 1179–1182  
+DOI: `10.1107/S0021889807048741`
+
+## Parent-grain reconstruction methodology
+
+**ARPGE: a computer program to automatically reconstruct the parent grains from electron backscatter diffraction data**  
+*Journal of Applied Crystallography* 40 (2007) 1183–1188  
+DOI: `10.1107/S0021889807048777`
+
+The software is an independent implementation of published mathematical concepts. It does not reproduce source code or GUI assets from software described in the literature.
+
+Where sources use different signs, bases, correspondence conventions, analytical forms, or interpretations, the adopted convention should be stated explicitly rather than silently combining incompatible expressions.
+
+---
+
+# Recommended academic workflow
+
+For a paper using measured NiTi lattice parameters:
+
+1. record the experimental lattice parameters and temperature;
+2. run the compatibility verdict;
+3. inspect the raw CMC and \(\lambda_2\) residuals;
+4. perform the PTMC/cofactor cross-check;
+5. inspect relevant variant/operator/twin relationships;
+6. use EBSD reconstruction when experimental parent orientations are required;
+7. evaluate Interaction Work when mechanical variant selection is part of the research question;
+8. propagate measurement uncertainty where relevant;
+9. use inverse design only after documenting the original lattice state;
+10. apply independent theorems only when their assumptions match the transformation;
+11. export the complete manuscript evidence record;
+12. archive the Git commit and evidence package.
+
+Results should be reported using numerical quantities and explicit criteria rather than only software-generated PASS/FAIL labels.
+
+---
+
+# Suggested Methods statement
+
+A concise manuscript description may be adapted from:
+
+> Crystallographic calculations were performed using Supercompatibility Lab. Measured parent and martensite lattice parameters were supplied directly to the transformation-metric engine. Austenite/martensite compatibility, stretch-eigenvalue conditions, transformation-twin relations and applicable supercompatibility conditions were evaluated using explicitly defined correspondence, metric and symmetry conventions. Numerical classifications were based on recorded residual tolerances. Where independent analytical expressions were available, they were compared against the general numerical formulation. Input parameters, residuals, calculation settings, equation provenance and software version were retained in a reproducibility evidence record.
+
+Only methods actually used in the study should be included in the final manuscript.
+
+---
+
+# Citation
+
+Research using Supercompatibility Lab should cite:
+
+1. the repository release, archived software version or commit used for the calculation; and
+2. the original theoretical publications corresponding to the methods used.
+
+The software should not be cited as a replacement for the underlying crystallographic theory.
+
+---
+
+# Software status
+
+Supercompatibility Lab is research software intended for:
+
+- crystallographic analysis;
+- numerical verification;
+- hypothesis testing;
+- transformation-variant analysis;
+- EBSD reconstruction;
+- method comparison;
+- uncertainty analysis;
+- inverse design;
+- experimental interpretation;
+- reproducible manuscript preparation.
+
+All results remain conditional on the assumptions of the selected mathematical framework and the quality of the supplied experimental data.
+
