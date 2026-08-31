@@ -16,7 +16,7 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "app.py"
 OUTPUTS = [ROOT / "app.py", ROOT / "streamlit_app.py", ROOT / "supercompatibility_r7.py", ROOT / "supercompatibility_final.py"]
-BUILD_MARKER = "2026-08-31-final-notation-explicit"
+BUILD_MARKER = "2026-08-31-final-ct-otsuka-reconstruction-ui"
 
 
 def enc(raw: bytes) -> str:
@@ -55,7 +55,7 @@ def main() -> None:
     source, n3 = re.subn(r"(?m)^# Build: .*?$", f"# Build: {BUILD_MARKER}", source, count=1)
     source, n4 = re.subn(
         r'(?m)^_EMBED_ROOT = Path\(_tempfile\.gettempdir\(\)\) / ".*?"$',
-        '_EMBED_ROOT = Path(_tempfile.gettempdir()) / "supercompatibility_lab_embedded_final_notation_explicit"',
+        '_EMBED_ROOT = Path(_tempfile.gettempdir()) / "supercompatibility_lab_embedded_final_ct_otsuka_reconstruction_ui"',
         source,
         count=1,
     )

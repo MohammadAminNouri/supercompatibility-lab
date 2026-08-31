@@ -11,8 +11,8 @@ import numpy as np
 from .core import C_A_TO_M, C_M_TO_A
 from .symbols import definitions_for_equation, operators_for_latex, symbol_rows
 
-ENGINE_VERSION = "4.0.0-final"
-BUILD_ID = "2026-08-31-final-notation-explicit"
+ENGINE_VERSION = "4.2.0-ct-otsuka-final"
+BUILD_ID = "2026-08-31-final-ct-otsuka-reconstruction-ui"
 BUILT_IN_TRANSFORMATION = "B2 austenite -> B19' martensite"
 PRIMARY_SOURCE = {
     "title": "Compatibilities and supercompatibility conditions in shape memory alloys determined from correspondence, metrics and symmetries",
@@ -86,6 +86,10 @@ EQUATIONS: tuple[EquationRecord, ...] = (
     EquationRecord("IND-TRIPLET-I", "Independent triplet condition", r"\alpha^2\gamma^2+2\gamma^2\beta^2-3\alpha^2\beta^2=0", "Independent cubic→orthorhombic triplet-condition branch", "Specialized TC-I residual for three-variant stress-free compatibility in the implemented transformation class.", "independent theorem implementation", "src.compatibility_methods.triplet_condition_orthorhombic", "Transformation-class specific; not a B2→B19' monoclinic certification criterion."),
     EquationRecord("IND-TRIPLET-II", "Independent triplet condition", r"2\alpha^2+\beta^2-3\gamma^2=0", "Independent cubic→orthorhombic triplet-condition branch", "Specialized TC-II residual for three-variant stress-free compatibility in the implemented transformation class.", "independent theorem implementation", "src.compatibility_methods.triplet_condition_orthorhombic", "Transformation-class specific; not a B2→B19' monoclinic certification criterion."),
     EquationRecord("APP-RECON", "Parent reconstruction", r"g_P\;\xrightarrow{OR,\;variant}\;g_D", "Independent crystallographic extension", "Reconstructs parent orientations from daughter orientations by OR-variant consistency using several transparent algorithmic families.", "independent method extension", "src.reconstruction", "Synthetic benchmark performance is not a substitute for validation on experimental EBSD with known parent ground truth."),
+    EquationRecord("APP-CT-OR", "NiTi CT/Otsuka–Ren reconstruction bridge", r"F_{M\leftarrow A}=B_M C^{M\to A}B_A^{-1}=R_{A\to M}U,\qquad R_{cp}=R_{A\to M}^{T}", "Primary-source NiTi metrics + Otsuka–Ren correspondence; polar OR bridge is a software extension", "Builds a metric-aware correspondence deformation from the NiTi B2/B19′ metrics and Otsuka–Ren correspondence, then uses its polar rotational factor only as a reproducible initial OR for orientation reconstruction.", "source-derived crystallography + explicit software bridge", "src.retransformation.niti_ct_otsuka_ren_orientation_relationship", "A lattice correspondence is not itself a unique experimental OR. Replace/refine this starting rotation with an experimentally measured OR when available."),
+    EquationRecord("APP-REGEN", "Parent → daughter regeneration", r"g_D^{(k)}=g_P S_P^{(k)}R_{cp}", "Crystallographic orientation-cycle extension", "Generates every symmetry-distinct daughter orientation branch from a reconstructed parent using the exact daughter→parent OR rotation and parent symmetry.", "independent method extension", "src.retransformation.regenerated_variant_library", "Allowed orientations are not nucleation probabilities, volume fractions or morphology predictions."),
+    EquationRecord("APP-CYCLE", "Daughter → parent → daughter closure", r"\delta_i=\min_k d_{G_D}(g_{D,i}^{meas},g_{D,P_i}^{(k)})", "Crystallographic orientation-cycle extension", "Measures round-trip internal consistency as the minimum daughter-symmetry-reduced misorientation between a measured daughter grain and the regenerated library of its reconstructed parent.", "independent method extension", "src.retransformation.cycle_closure_table", "Because the same OR is used for reconstruction and regeneration, low closure residual is internal consistency, not independent experimental validation."),
+    EquationRecord("APP-SWITCH", "Regenerated daughter branch geometry", r"\Delta\theta_{j\to k}=d_{G_D}(g_D^{(j)},g_D^{(k)})", "Crystallographic orientation-cycle extension", "Reports the symmetry-reduced orientation change between any two allowed regenerated daughter branches of the same parent.", "independent method extension", "src.retransformation.branch_switch_catalog", "Geometric branch-to-branch angle is not a switching probability or energy barrier."),
 )
 
 

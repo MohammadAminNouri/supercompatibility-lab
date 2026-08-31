@@ -427,11 +427,21 @@ def _finalize(
         p = parent_orientations[int(parent_ids[i])]
         ph1, PH, ph2 = matrix_to_bunge_euler(p)
         qw, qx, qy, qz = quaternion_wxyz(p)
+        candidate_fits = sorted(float(misorientation_deg(c, p, parent_sym)) for c, _ in cands[i])
+        second_fit = candidate_fits[1] if len(candidate_fits) > 1 else 180.0
+        candidate_gap = max(second_fit - float(fit[i]), 0.0)
+        absolute_fit_support = float(np.exp(-0.5 * (float(fit[i]) / 3.0) ** 2))
+        separation_support = float(1.0 - np.exp(-candidate_gap / 3.0))
         rows.append({
             "grain_id": int(grain_ids[i]),
             "reconstructed_parent_id": int(parent_ids[i]),
             "variant_candidate_id": int(variant_ids[i]),
             "fit_deg": float(fit[i]),
+            "second_best_candidate_fit_deg": float(second_fit),
+            "candidate_separation_deg": float(candidate_gap),
+            "candidate_count": int(len(candidate_fits)),
+            "absolute_fit_support": absolute_fit_support,
+            "separation_support": separation_support,
             "confidence": float(conf[i]),
             "parent_phi1_deg": ph1,
             "parent_Phi_deg": PH,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import sys
 import types
 
@@ -60,3 +62,49 @@ def test_explicit_point_segmentation_separates_misoriented_regions():
     grains, _ = _segment_points_to_grains(pd.DataFrame(pts), symmetry_group("cubic"), 5.0, 2)
     assert len(grains) == 2
     assert sorted(grains["point_count"].tolist()) == [4, 4]
+
+
+def test_ang_parser_preserves_standard_quality_fields_and_nonindexed_phase():
+    raw = b"# VERSION: 5\n0.1 0.2 0.3 1 2 100 0.9 1 12 0.5\n0.2 0.3 0.4 2 2 80 -1 0 10 1.0\n"
+    out = _read_ang_bytes(raw)
+    assert {"IQ", "CI", "phase", "SEM_signal", "fit"}.issubset(out.columns)
+    assert out.loc[1, "phase"] == 0
+    assert out.attrs["format"] == "ANG"
+    assert "radians" in out.attrs["euler_input_unit"]
+
+
+def test_ang_parser_fails_safe_but_marks_nonstandard_degree_angles():
+    raw = b"10 20 30 0 0 100 0.8 1 5 0.5\n"
+    out = _read_ang_bytes(raw)
+    assert np.isclose(out.loc[0, "phi1_deg"], 10.0)
+    assert "inferred" in out.attrs["euler_input_unit"]
+
+
+def test_ctf_parser_preserves_quality_columns():
+    raw = b"Channel Text File\nXCells\t2\nYCells\t1\nPhase\tX\tY\tBands\tError\tEuler1\tEuler2\tEuler3\tMAD\tBC\tBS\n1\t0\t0\t8\t0\t10\t20\t30\t0.5\t100\t20\n"
+    out = _read_ctf_bytes(raw)
+    assert {"Bands", "Error", "MAD", "BC", "BS"}.issubset(out.columns)
+    assert out.attrs["format"] == "CTF"
+
+
+def test_segmentation_exports_spread_and_boundary_contact_evidence():
+    pts = []
+    for x, y in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+        pts.append({"x": x, "y": y, "phi1_deg": 0.0, "Phi_deg": 20.0, "phi2_deg": 10.0, "phase": 1})
+    for x, y in [(2, 0), (3, 0), (2, 1), (3, 1)]:
+        pts.append({"x": x, "y": y, "phi1_deg": 30.0, "Phi_deg": 20.0, "phi2_deg": 10.0, "phase": 1})
+    grains, adj = _segment_points_to_grains(pd.DataFrame(pts), symmetry_group("cubic"), 5.0, 2, neighbor_radius_factor=1.35)
+    assert {"grain_orientation_spread_rms_deg", "grain_orientation_spread_max_deg", "area_est_mapunit2"}.issubset(grains.columns)
+    assert {"boundary_contact_count", "boundary_length_est_mapunit"}.issubset(adj.columns)
+    assert len(grains) == 2
+    assert len(adj) >= 1
+
+
+def test_workbench_exposes_ct_otsuka_ren_and_clean_four_workspace_navigation():
+    source = Path("src/reconstruction_workbench.py").read_text(encoding="utf-8")
+    assert "CT + Otsuka–Ren correspondence" in source
+    assert "model-derived initial OR" in source
+    assert "1 · Reconstruct parent" in source
+    assert "2 · NiTi B19′↔B2 cycle" in source
+    assert "3 · Forward & batch" in source
+    assert "4 · Academic guide" in source

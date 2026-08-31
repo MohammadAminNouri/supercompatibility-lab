@@ -51,7 +51,11 @@ The B2/B19′ lattice input form is hidden automatically in the parent-reconstru
 
 **No-symbol-left-behind rule:** every mathematical symbol shown in the app is defined immediately beside the formula, input, output, or technical table where it appears. The same notation dictionary is embedded in paper-ready JSON/Markdown exports, so a result remains interpretable outside the UI.
 
-**Final validation:** 63/63 automated tests pass locally, plus equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
+**Final validation:** 93/93 automated tests pass across the complete suite when run in validated batches, including dedicated EBSD import/segmentation, academic reconstruction comparison and export tests. Equation/source parity, numerical release, embedded-bundle integrity, scientific self-test and deployment-preflight audits also pass. GitHub Actions performs the actual Streamlit server health check after installing dependencies.
+
+**B19′ → B2 → B19′ cycle reconstruction:** the parent/daughter workspace can now reuse a completed B19′→B2 reconstruction and regenerate every symmetry-distinct B19′ orientation branch from each reconstructed B2 parent. It reports round-trip closure residuals, observed branch occupancy, branch-to-branch orientation-change matrices, and can match an independently measured later-cycle B19′ EBSD dataset. A metric-aware NiTi natural/AQ quick setup constructs the OR from `(010)B19′ ∥ (110)B2` and `[101]B19′ ∥ [−1 1 1]B2` using direct and reciprocal lattice metrics rather than treating monoclinic Miller indices as Cartesian vectors.
+
+**NiTi CT + Otsuka–Ren reconstruction bridge:** the reconstruction workspace now also exposes the source-derived B2/B19′ correspondence matrix and measured lattice metrics used by Correspondence Theory. Because correspondence is not itself a unique experimental orientation relationship, the app transparently forms a metric-aware correspondence deformation and uses its polar rotational factor only as a reproducible **model-derived starting OR**. The natural/AQ route, KS/NW/Bain/Pitsch/Burgers presets, custom parallelisms and custom OR matrix remain available unchanged. The parent/daughter home page is grouped into four academic workspaces: reconstruct parent, NiTi cycle, forward/batch, and academic guide.
 
 ## Main workspaces
 
@@ -151,15 +155,17 @@ Full built-in twin classification is **not silently generalized** to arbitrary p
 
 ### 9. Parent ↔ daughter orientation reconstruction
 
-A grain-level reconstruction workbench accepts daughter orientations plus measured grain adjacency and provides five independently testable reconstruction routes:
+The reconstruction workbench accepts either pre-segmented daughter grains or raw `.ang` / `.ctf` / delimited EBSD point maps. Raw imports are audited before use: phase 0 is treated as non-indexed, the daughter phase is selected explicitly, vendor quality filters are optional and off by default, and the user must confirm the Euler/map reference-frame convention before segmentation. Small raw maps can be segmented in-app with explicit disorientation, minimum-point and spatial-neighbor controls; production-scale maps can instead supply externally segmented grains and measured adjacency.
+
+Five independently testable reconstruction routes can be run on the same data:
 
 - neighbor voting;
 - grain graph + Markov clustering;
-- candidate-level variant graph probability propagation;
+- candidate-level variant graph propagation;
 - nucleation + growth;
-- operator / groupoid consistency.
+- operator / groupoid consistency with per-edge operator IDs and residuals.
 
-A bounded OR-refinement routine can reduce neighbor inconsistency near a supplied physical OR. Built-in KS, NW, Bain, Pitsch and Burgers OR families provide symmetry-generated variants and forward parent→daughter prediction. A synthetic dataset with known parent labels is included for method validation. Approximate centroid k-NN adjacency is available only as a visibly labelled fallback when true segmented-grain adjacency is unavailable.
+A bounded OR-refinement routine can reduce neighbor inconsistency near a supplied physical OR. Built-in KS, NW, Bain, Pitsch and Burgers OR families provide symmetry-generated variants and forward parent→daughter prediction. The output now exposes best/second-best candidate residuals, candidate separation, heuristic support decomposition, parent-level variant diversity, operator frequencies and full parent orientations. Cross-method evidence includes ARI, NMI, prior-parent-boundary Jaccard agreement, overlap-matched parent-orientation disagreement and a boundary-consensus table. A one-click academic evidence ZIP exports the analyzed input, exact OR, all controls, per-method parent/daughter tables, variant/operator statistics and cross-method matrices. Approximate centroid k-NN adjacency remains available only as a visibly labelled fallback when true shared-boundary adjacency is unavailable. See `docs/RECONSTRUCTION.md`.
 
 ### 10. Independent compatibility methods
 

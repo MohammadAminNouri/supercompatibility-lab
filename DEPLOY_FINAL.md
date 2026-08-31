@@ -37,4 +37,4 @@ Create a **new deployment** with:
 - Main file path: `supercompatibility_final.py`
 - Python: 3.12
 
-The visible build identifier must be `2026-08-31-final-notation-explicit`.
+The visible build identifier must be `2026-08-31-final-ct-otsuka-reconstruction-ui`.

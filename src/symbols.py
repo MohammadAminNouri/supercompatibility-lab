@@ -116,6 +116,18 @@ SYMBOLS: dict[str, SymbolDefinition] = {
     "gD": SymbolDefinition(r"g_D", "daughter crystal orientation matrix", "rotation matrix"),
     "OR": SymbolDefinition(r"OR", "orientation relationship mapping parent and daughter crystallographic frames", "rotation/orientation relation"),
     "variant": SymbolDefinition(r"variant", "symmetry-equivalent crystallographic transformation choice", "discrete index/class"),
+    "SPk": SymbolDefinition(r"S_P^{(k)}", "k-th proper parent crystal-symmetry rotation used to generate a daughter orientation branch", "rotation matrix"),
+    "Rcp": SymbolDefinition(r"R_{cp}", "proper daughter-to-parent crystal-frame orientation-relationship rotation", "rotation matrix"),
+    "BA": SymbolDefinition(r"B_A", "Cartesian direct-lattice basis matrix of the parent/austenite B2 crystal", "length matrix", "columns are the parent direct-lattice basis vectors in an orthonormal Cartesian crystal frame"),
+    "BM": SymbolDefinition(r"B_M", "Cartesian direct-lattice basis matrix of the daughter/martensite B19′ crystal", "length matrix", "contains the measured monoclinic lattice lengths and angle"),
+    "FMA": SymbolDefinition(r"F_{M\leftarrow A}", "metric-aware correspondence deformation mapping parent Cartesian lattice vectors into daughter Cartesian lattice vectors", "dimensionless deformation gradient", "software bridge used to obtain a model-derived starting OR from the CT/Otsuka–Ren correspondence"),
+    "RAM": SymbolDefinition(r"R_{A\to M}", "proper rotational factor of the polar decomposition of the correspondence deformation", "rotation matrix", "its transpose is the daughter→parent rotation R_cp consumed by reconstruction"),
+    "gDk": SymbolDefinition(r"g_D^{(k)}", "k-th symmetry-distinct regenerated daughter orientation generated from one parent", "rotation matrix"),
+    "delta_cycle": SymbolDefinition(r"\delta_i", "round-trip daughter→parent→daughter closure misorientation for measured daughter grain i", "degrees"),
+    "dGD": SymbolDefinition(r"d_{G_D}", "minimum disorientation angle after reducing by daughter crystal symmetry group G_D", "degrees"),
+    "gDmeas": SymbolDefinition(r"g_{D,i}^{meas}", "measured daughter orientation of grain i", "rotation matrix"),
+    "Pi": SymbolDefinition(r"P_i", "reconstructed parent assigned to daughter grain i", "discrete parent ID"),
+    "DeltaSwitch": SymbolDefinition(r"\Delta\theta_{j\to k}", "daughter-symmetry-reduced orientation change from regenerated branch j to branch k", "degrees"),
 }
 
 
@@ -168,6 +180,10 @@ EQUATION_SYMBOLS: dict[str, tuple[str, ...]] = {
     "IND-TRIPLET-I": ("alpha", "beta_trip", "gamma"),
     "IND-TRIPLET-II": ("alpha", "beta_trip", "gamma"),
     "APP-RECON": ("gP", "OR", "variant", "gD"),
+    "APP-CT-OR": ("FMA", "BM", "C_M_A", "BA", "RAM", "U", "Rcp"),
+    "APP-REGEN": ("gP", "SPk", "Rcp", "gDk"),
+    "APP-CYCLE": ("delta_cycle", "dGD", "gDmeas", "Pi", "gDk"),
+    "APP-SWITCH": ("DeltaSwitch", "dGD", "gDk"),
 }
 
 

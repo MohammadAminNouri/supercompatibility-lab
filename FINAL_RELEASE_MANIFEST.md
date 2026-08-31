@@ -1,19 +1,24 @@
 # Final release manifest
 
-**Build ID:** `2026-08-31-final-notation-explicit`
+**Build ID:** `2026-08-31-final-ct-otsuka-reconstruction-ui`
 
 **Recommended Streamlit entrypoint:** `supercompatibility_final.py`
 
 ## Scientific release checks completed before packaging
 
-- 63/63 automated tests passed.
+- 93/93 collected automated tests passed in validated batches after the CT/Otsuka–Ren and UI additions.
 - Equation/source parity audit passed.
 - Deployment preflight passed.
 - Embedded-engine scientific self-test passed.
 - Numerical release audit passed.
-- Deterministic embedded-bundle audit passed: all 23 `src` Python modules and all 9 data assets match the self-contained Streamlit bundle byte-for-byte.
+- Deterministic embedded-bundle audit passed: all 27 `src` Python modules and all 9 data assets match the self-contained Streamlit bundle byte-for-byte.
 - `app.py`, `streamlit_app.py`, `supercompatibility_r7.py`, and `supercompatibility_final.py` are byte-identical deployment aliases.
+- Obsolete upgrade/bootstrap backups and stale R6 deployment instructions were removed from the GitHub-ready release root.
 - Parent/daughter reconstruction validation recovered the deterministic two-parent benchmark with all five implemented methods.
+- Reconstruction-specific tests cover robust ANG/CTF parsing, explicit phase/reference-frame guards, raw-point segmentation, candidate ambiguity, ARI/NMI/boundary/orientation agreement, operator statistics and the academic evidence ZIP.
+- Cycle tests cover the metric-aware NiTi B2↔B19′ natural/AQ OR, the CT/Otsuka–Ren model-derived polar starting OR, 12 regenerated B19′ branches for both NiTi routes, daughter→parent→daughter closure, branch occupancy, branch-switch geometry, independent later-cycle daughter matching and the cycle evidence ZIP.
+- The dedicated CT/Otsuka–Ren option exposes the exact correspondence matrix, metric-aware deformation, polar rotation, principal stretches and the explicit caveat that correspondence is not itself a unique experimental OR.
+- The cycle workflow explicitly distinguishes **internal round-trip consistency** from **independent later-cycle EBSD validation** and never turns an allowed daughter orientation into a claimed nucleation probability.
 - The source-discrepancy register is preserved in `docs/SOURCE_DISCREPANCIES.md`; discrepancies are surfaced rather than silently reconciled.
 - Formula notation, operators, primary inputs, and core outputs are covered by the explicit notation/provenance layer and tested in `tests/test_symbol_completeness.py`.
 
@@ -29,8 +34,8 @@ Use:
 - Main file path: `supercompatibility_final.py`
 - Python: `3.12`
 
-The visible build identifier must be `2026-08-31-final-notation-explicit`.
+The visible build identifier must be `2026-08-31-final-ct-otsuka-reconstruction-ui`.
 
 ## Environment note
 
-The packaging container used for this release did not have Streamlit installed, so the Streamlit server itself was not launched locally during packaging. The final GitHub Actions workflow installs the pinned Streamlit dependency and requires the `/_stcore/health` endpoint to pass before CI is green.
+The packaging container used for this release does not provide the Streamlit browser runtime. GitHub Actions installs the pinned Streamlit dependency and requires the `/_stcore/health` endpoint to pass before CI is green.
